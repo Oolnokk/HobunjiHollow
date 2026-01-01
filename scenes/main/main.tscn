@@ -1,0 +1,16 @@
+[gd_scene load_steps=2 format=3 uid="uid://dh3q8p7x0v5qy"]
+
+[ext_resource type="Script" path="res://scripts/systems/game_manager.gd" id="1_1"]
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1_1")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 5, 0)
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 10, 10)
+projection = 1
+size = 20.0

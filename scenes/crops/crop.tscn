@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3 uid="uid://d4q8p7x0v5qc"]
+
+[ext_resource type="Script" path="res://scripts/crops/crop.gd" id="1_1"]
+
+[node name="Crop" type="Node3D"]
+script = ExtResource("1_1")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+
+[node name="GrowthTimer" type="Timer" parent="."]

@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3 uid="uid://c3q8p7x0v5qz"]
+
+[ext_resource type="Script" path="res://scripts/world/farm_manager.gd" id="1_1"]
+
+[node name="Farm" type="Node3D"]
+script = ExtResource("1_1")
+
+[node name="Ground" type="StaticBody3D" parent="."]
+
+[node name="CropGrid" type="Node3D" parent="."]
