@@ -1,5 +1,6 @@
 {
   "recipes": [
-    "wallrecipe2.json"
+    "wallrecipe2.json",
+    "log_wall1.json"
   ]
 }
