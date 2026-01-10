@@ -4,7 +4,7 @@
   "seed": "seed-001",
   "axisUp": "Y",
   "model": {
-    "uri": "curvedbeam2.glb",
+    "uri": "curvedbeam1.glb",
     "nodeName": "FOUNDATION"
   },
   "preTransform": {
