@@ -10,7 +10,7 @@
  * Stub for ghost army patrol system
  * TODO: Fully implement ghost army patrols and Fae protection
  */
-UCLASS()
+UCLASS(Blueprintable, BlueprintType)
 class HABUNJIHOLLOW_API UHHGhostArmyManager : public UObject
 {
 	GENERATED_BODY()

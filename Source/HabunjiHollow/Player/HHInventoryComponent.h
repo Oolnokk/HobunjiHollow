@@ -42,11 +42,11 @@ public:
 	void Server_RemoveItem(FName ItemID, int32 Quantity);
 
 	// Check if inventory has item
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
+	UFUNCTION(BlueprintPure, Category = "Inventory")
 	bool HasItem(FName ItemID, int32 Quantity = 1) const;
 
 	// Get item count
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
+	UFUNCTION(BlueprintPure, Category = "Inventory")
 	int32 GetItemCount(FName ItemID) const;
 
 	// Add/remove money
@@ -57,10 +57,10 @@ public:
 	void Server_RemoveMoney(int32 Amount);
 
 	// Check available slots
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
+	UFUNCTION(BlueprintPure, Category = "Inventory")
 	int32 GetAvailableSlots() const;
 
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
+	UFUNCTION(BlueprintPure, Category = "Inventory")
 	bool IsFull() const;
 
 	// Blueprint events
