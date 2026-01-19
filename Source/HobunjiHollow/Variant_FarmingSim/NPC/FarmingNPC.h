@@ -92,25 +92,25 @@ public:
 	virtual void OnFocusGained_Implementation() override;
 	virtual void OnFocusLost_Implementation() override;
 
-	/** Get current friendship level (0-10 hearts) */
+	/** Get current friendship level for a specific player (0-10 hearts) */
 	UFUNCTION(BlueprintCallable, Category = "NPC|Friendship")
-	int32 GetFriendshipLevel() const;
+	int32 GetFriendshipLevel(AActor* Player) const;
 
-	/** Get current friendship points */
+	/** Get current friendship points for a specific player */
 	UFUNCTION(BlueprintCallable, Category = "NPC|Friendship")
-	int32 GetFriendshipPoints() const;
+	int32 GetFriendshipPoints(AActor* Player) const;
 
-	/** Add friendship points */
+	/** Add friendship points for a specific player */
 	UFUNCTION(BlueprintCallable, Category = "NPC|Friendship")
-	void AddFriendshipPoints(int32 Points);
+	void AddFriendshipPoints(AActor* Player, int32 Points);
 
-	/** Check if player has seen a specific dialogue */
+	/** Check if a player has seen a specific dialogue */
 	UFUNCTION(BlueprintCallable, Category = "NPC|Dialogue")
-	bool HasSeenDialogue(FName DialogueID) const;
+	bool HasSeenDialogue(AActor* Player, FName DialogueID) const;
 
-	/** Mark a dialogue as seen */
+	/** Mark a dialogue as seen for a specific player */
 	UFUNCTION(BlueprintCallable, Category = "NPC|Dialogue")
-	void MarkDialogueSeen(FName DialogueID);
+	void MarkDialogueSeen(AActor* Player, FName DialogueID);
 
 	/** Update NPC schedule based on current time */
 	UFUNCTION(BlueprintCallable, Category = "NPC|Schedule")
@@ -121,8 +121,8 @@ public:
 	void StartConversation(AActor* InteractingActor);
 
 protected:
-	/** Get relationship data from world save */
-	bool GetRelationshipData(FNPCRelationshipSave& OutRelationship) const;
+	/** Get relationship data for a specific player from their PlayerState */
+	bool GetRelationshipData(AActor* Player, FNPCRelationshipSave& OutRelationship) const;
 
 	/** Find the best matching schedule entry */
 	int32 FindBestScheduleEntry(float CurrentTime, int32 CurrentDay, int32 CurrentSeason) const;

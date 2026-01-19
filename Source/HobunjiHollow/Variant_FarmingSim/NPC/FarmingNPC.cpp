@@ -3,7 +3,9 @@
 #include "FarmingNPC.h"
 #include "Save/FarmingWorldSaveGame.h"
 #include "FarmingGameMode.h"
+#include "FarmingPlayerState.h"
 #include "Kismet/GameplayStatics.h"
+#include "GameFramework/PlayerController.h"
 
 AFarmingNPC::AFarmingNPC()
 {
@@ -53,103 +55,138 @@ void AFarmingNPC::OnFocusLost_Implementation()
 	// Blueprint can remove visual feedback here
 }
 
-int32 AFarmingNPC::GetFriendshipLevel() const
+int32 AFarmingNPC::GetFriendshipLevel(AActor* Player) const
 {
-	int32 Points = GetFriendshipPoints();
+	int32 Points = GetFriendshipPoints(Player);
 	return FMath::Clamp(Points / PointsPerHeartLevel, 0, 10);
 }
 
-int32 AFarmingNPC::GetFriendshipPoints() const
+int32 AFarmingNPC::GetFriendshipPoints(AActor* Player) const
 {
-	FNPCRelationshipSave Relationship;
-	if (GetRelationshipData(Relationship))
+	if (!Player)
 	{
-		return Relationship.FriendshipPoints;
+		return 0;
 	}
-	return 0;
+
+	// Get PlayerState from the player
+	AController* Controller = Cast<AController>(Player);
+	if (!Controller)
+	{
+		APawn* Pawn = Cast<APawn>(Player);
+		if (Pawn)
+		{
+			Controller = Pawn->GetController();
+		}
+	}
+
+	if (!Controller)
+	{
+		return 0;
+	}
+
+	AFarmingPlayerState* PlayerState = Controller->GetPlayerState<AFarmingPlayerState>();
+	if (!PlayerState)
+	{
+		return 0;
+	}
+
+	return PlayerState->GetFriendshipPoints(NPCID);
 }
 
-void AFarmingNPC::AddFriendshipPoints(int32 Points)
+void AFarmingNPC::AddFriendshipPoints(AActor* Player, int32 Points)
 {
-	AFarmingGameMode* GameMode = Cast<AFarmingGameMode>(UGameplayStatics::GetGameMode(this));
-	if (!GameMode || !GameMode->GetWorldSave())
+	if (!Player)
 	{
 		return;
 	}
 
-	UFarmingWorldSaveGame* WorldSave = GameMode->GetWorldSave();
-	FNPCRelationshipSave Relationship;
-
-	if (WorldSave->GetNPCRelationship(NPCID, Relationship))
+	// Get PlayerState from the player
+	AController* Controller = Cast<AController>(Player);
+	if (!Controller)
 	{
-		int32 OldLevel = Relationship.FriendshipPoints / PointsPerHeartLevel;
-		Relationship.FriendshipPoints += Points;
-		int32 NewLevel = Relationship.FriendshipPoints / PointsPerHeartLevel;
-
-		UE_LOG(LogTemp, Log, TEXT("%s friendship: %d points (Level %d)"),
-			*DisplayName.ToString(), Relationship.FriendshipPoints, NewLevel);
-
-		// Level up notification
-		if (NewLevel > OldLevel)
+		APawn* Pawn = Cast<APawn>(Player);
+		if (Pawn)
 		{
-			UE_LOG(LogTemp, Log, TEXT("%s reached friendship level %d!"),
-				*DisplayName.ToString(), NewLevel);
+			Controller = Pawn->GetController();
 		}
-
-		WorldSave->SetNPCRelationship(Relationship);
 	}
-	else
-	{
-		// Create new relationship
-		FNPCRelationshipSave NewRelationship;
-		NewRelationship.NPCID = NPCID;
-		NewRelationship.FriendshipPoints = Points;
-		WorldSave->SetNPCRelationship(NewRelationship);
 
-		UE_LOG(LogTemp, Log, TEXT("Started friendship with %s: %d points"),
-			*DisplayName.ToString(), Points);
-	}
-}
-
-bool AFarmingNPC::HasSeenDialogue(FName DialogueID) const
-{
-	FNPCRelationshipSave Relationship;
-	if (GetRelationshipData(Relationship))
-	{
-		return Relationship.CompletedDialogues.Contains(DialogueID);
-	}
-	return false;
-}
-
-void AFarmingNPC::MarkDialogueSeen(FName DialogueID)
-{
-	AFarmingGameMode* GameMode = Cast<AFarmingGameMode>(UGameplayStatics::GetGameMode(this));
-	if (!GameMode || !GameMode->GetWorldSave())
+	if (!Controller)
 	{
 		return;
 	}
 
-	UFarmingWorldSaveGame* WorldSave = GameMode->GetWorldSave();
-	FNPCRelationshipSave Relationship;
-
-	if (WorldSave->GetNPCRelationship(NPCID, Relationship))
+	AFarmingPlayerState* PlayerState = Controller->GetPlayerState<AFarmingPlayerState>();
+	if (!PlayerState)
 	{
-		if (!Relationship.CompletedDialogues.Contains(DialogueID))
+		return;
+	}
+
+	PlayerState->AddFriendshipPoints(NPCID, Points);
+}
+
+bool AFarmingNPC::HasSeenDialogue(AActor* Player, FName DialogueID) const
+{
+	if (!Player)
+	{
+		return false;
+	}
+
+	// Get PlayerState from the player
+	AController* Controller = Cast<AController>(Player);
+	if (!Controller)
+	{
+		APawn* Pawn = Cast<APawn>(Player);
+		if (Pawn)
 		{
-			Relationship.CompletedDialogues.Add(DialogueID);
-			WorldSave->SetNPCRelationship(Relationship);
-			UE_LOG(LogTemp, Log, TEXT("%s dialogue completed: %s"),
-				*DisplayName.ToString(), *DialogueID.ToString());
+			Controller = Pawn->GetController();
 		}
 	}
-	else
+
+	if (!Controller)
 	{
-		// Create new relationship
-		FNPCRelationshipSave NewRelationship;
-		NewRelationship.NPCID = NPCID;
-		NewRelationship.CompletedDialogues.Add(DialogueID);
-		WorldSave->SetNPCRelationship(NewRelationship);
+		return false;
 	}
+
+	AFarmingPlayerState* PlayerState = Controller->GetPlayerState<AFarmingPlayerState>();
+	if (!PlayerState)
+	{
+		return false;
+	}
+
+	return PlayerState->HasSeenDialogue(NPCID, DialogueID);
+}
+
+void AFarmingNPC::MarkDialogueSeen(AActor* Player, FName DialogueID)
+{
+	if (!Player)
+	{
+		return;
+	}
+
+	// Get PlayerState from the player
+	AController* Controller = Cast<AController>(Player);
+	if (!Controller)
+	{
+		APawn* Pawn = Cast<APawn>(Player);
+		if (Pawn)
+		{
+			Controller = Pawn->GetController();
+		}
+	}
+
+	if (!Controller)
+	{
+		return;
+	}
+
+	AFarmingPlayerState* PlayerState = Controller->GetPlayerState<AFarmingPlayerState>();
+	if (!PlayerState)
+	{
+		return;
+	}
+
+	PlayerState->MarkDialogueSeen(NPCID, DialogueID);
 }
 
 void AFarmingNPC::UpdateSchedule(float CurrentTime, int32 CurrentDay, int32 CurrentSeason)
@@ -163,14 +200,36 @@ void AFarmingNPC::UpdateSchedule(float CurrentTime, int32 CurrentDay, int32 Curr
 	}
 }
 
-bool AFarmingNPC::GetRelationshipData(FNPCRelationshipSave& OutRelationship) const
+bool AFarmingNPC::GetRelationshipData(AActor* Player, FNPCRelationshipSave& OutRelationship) const
 {
-	AFarmingGameMode* GameMode = Cast<AFarmingGameMode>(UGameplayStatics::GetGameMode(this));
-	if (GameMode && GameMode->GetWorldSave())
+	if (!Player)
 	{
-		return GameMode->GetWorldSave()->GetNPCRelationship(NPCID, OutRelationship);
+		return false;
 	}
-	return false;
+
+	// Get PlayerState from the player
+	AController* Controller = Cast<AController>(Player);
+	if (!Controller)
+	{
+		APawn* Pawn = Cast<APawn>(Player);
+		if (Pawn)
+		{
+			Controller = Pawn->GetController();
+		}
+	}
+
+	if (!Controller)
+	{
+		return false;
+	}
+
+	AFarmingPlayerState* PlayerState = Controller->GetPlayerState<AFarmingPlayerState>();
+	if (!PlayerState)
+	{
+		return false;
+	}
+
+	return PlayerState->GetNPCRelationship(NPCID, OutRelationship);
 }
 
 int32 AFarmingNPC::FindBestScheduleEntry(float CurrentTime, int32 CurrentDay, int32 CurrentSeason) const
@@ -237,5 +296,5 @@ void AFarmingNPC::StartConversation_Implementation(AActor* InteractingActor)
 {
 	// Default implementation - override in Blueprint to show dialogue UI
 	UE_LOG(LogTemp, Log, TEXT("Started conversation with %s (Friendship Level: %d)"),
-		*DisplayName.ToString(), GetFriendshipLevel());
+		*DisplayName.ToString(), GetFriendshipLevel(InteractingActor));
 }
