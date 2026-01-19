@@ -20,7 +20,8 @@ public class HobunjiHollow : ModuleRules
 			"GameplayStateTreeModule",
 			"Niagara",
 			"UMG",
-			"Slate"
+			"Slate",
+			"OnlineSubsystemUtils" // For multiplayer/replication support
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { "SlateCore" });
