@@ -36,6 +36,8 @@ public class HobunjiHollow : ModuleRules
 			"HobunjiHollow/Player/Character",
 			"HobunjiHollow/Player/Inventory",
 			"HobunjiHollow/Player/Skills",
+			"HobunjiHollow/UI",
+			"HobunjiHollow/UI/SaveSystem",
 			"HobunjiHollow/Variant_Strategy",
 			"HobunjiHollow/Variant_Strategy/UI",
 			"HobunjiHollow/Variant_TwinStick",
