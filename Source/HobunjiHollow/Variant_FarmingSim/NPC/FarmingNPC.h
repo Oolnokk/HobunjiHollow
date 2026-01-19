@@ -9,6 +9,7 @@
 
 class UFarmingWorldSaveGame;
 class UDialogueData;
+struct FNPCRelationshipSave;
 
 /**
  * Schedule entry defining where an NPC should be at a specific time

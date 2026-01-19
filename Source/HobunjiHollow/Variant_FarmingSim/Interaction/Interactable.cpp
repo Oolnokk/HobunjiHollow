@@ -4,7 +4,7 @@
 
 // Default implementations
 
-void IInteractable::Interact_Implementation(AActor* Instigator)
+void IInteractable::Interact_Implementation(AActor* InteractingActor)
 {
 	// Override in Blueprint or C++
 }
@@ -14,7 +14,7 @@ FText IInteractable::GetInteractionPrompt_Implementation() const
 	return FText::FromString(TEXT("Interact"));
 }
 
-bool IInteractable::CanInteract_Implementation(AActor* Instigator) const
+bool IInteractable::CanInteract_Implementation(AActor* InteractingActor) const
 {
 	return true;
 }
