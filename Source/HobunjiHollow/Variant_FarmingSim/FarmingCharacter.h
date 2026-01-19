@@ -66,6 +66,10 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Farming|Inventory")
 	UGearInventoryComponent* GearInventory;
 
+	/** Default animation blueprint (used if species doesn't specify one) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Farming|Animation")
+	TSubclassOf<UAnimInstance> DefaultAnimationBlueprint;
+
 	/** Get the current character save */
 	UFUNCTION(BlueprintCallable, Category = "Farming|Save")
 	UFarmingCharacterSaveGame* GetCharacterSave() const { return CharacterSave; }

@@ -141,6 +141,15 @@ void AFarmingCharacter::ApplySpeciesAppearance(const FName& SpeciesID, ECharacte
 		// Apply the skeletal mesh
 		GetMesh()->SetSkeletalMesh(SelectedMesh);
 
+		// Apply animation blueprint (species-specific or default)
+		TSubclassOf<UAnimInstance> AnimBP = SpeciesData.AnimationBlueprint ?
+			SpeciesData.AnimationBlueprint : DefaultAnimationBlueprint;
+
+		if (AnimBP)
+		{
+			GetMesh()->SetAnimInstanceClass(AnimBP);
+		}
+
 		UE_LOG(LogTemp, Log, TEXT("Applied species appearance: %s (%s)"),
 			*SpeciesData.DisplayName.ToString(),
 			Gender == ECharacterGender::Male ? TEXT("Male") : TEXT("Female"));
