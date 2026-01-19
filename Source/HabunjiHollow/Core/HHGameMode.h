@@ -10,7 +10,7 @@
  * Main game mode for Habunji Hollow
  * Manages core world systems
  */
-UCLASS(Blueprintable, BlueprintType)
+UCLASS()
 class HABUNJIHOLLOW_API AHHGameMode : public AGameModeBase
 {
 	GENERATED_BODY()

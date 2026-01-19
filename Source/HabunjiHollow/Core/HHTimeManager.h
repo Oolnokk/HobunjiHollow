@@ -57,13 +57,13 @@ public:
 	void SkipToNextDay();
 
 	// Ghost army checks
-	UFUNCTION(BlueprintPure, Category = "Time|Events")
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Time|Events")
 	bool IsGhostArmyNight() const;
 
-	UFUNCTION(BlueprintPure, Category = "Time")
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Time")
 	FHHDateTimeStamp GetCurrentDateTime() const;
 
-	UFUNCTION(BlueprintPure, Category = "Time")
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Time")
 	EDayOfWeek GetCurrentDayOfWeek() const;
 
 	// Events

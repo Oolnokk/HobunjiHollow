@@ -11,7 +11,7 @@
  * Game Instance - Persistent between levels
  * Manages save/load and multiplayer sessions
  */
-UCLASS(Blueprintable, BlueprintType)
+UCLASS()
 class HABUNJIHOLLOW_API UHHGameInstance : public UGameInstance
 {
 	GENERATED_BODY()
