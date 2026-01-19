@@ -15,6 +15,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputAction.h"
 #include "FarmingPlayerController.h"
+#include "Kismet/KismetMathLibrary.h"
 
 AFarmingCharacter::AFarmingCharacter()
 {
@@ -44,10 +45,13 @@ AFarmingCharacter::AFarmingCharacter()
 	GearInventory = CreateDefaultSubobject<UGearInventoryComponent>(TEXT("GearInventory"));
 
 	// Configure character movement
-	GetCharacterMovement()->bOrientRotationToMovement = true;
+	GetCharacterMovement()->bOrientRotationToMovement = false; // Controlled by aim instead
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 640.0f, 0.0f);
 	GetCharacterMovement()->bConstrainToPlane = true;
 	GetCharacterMovement()->bSnapToPlaneAtStart = true;
+
+	// Default mouse aim trace channel
+	MouseAimTraceChannel = UEngineTypes::ConvertToTraceType(ECC_Visibility);
 
 	PrimaryActorTick.bCanEverTick = true;
 }
@@ -55,6 +59,39 @@ AFarmingCharacter::AFarmingCharacter()
 void AFarmingCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+}
+
+void AFarmingCharacter::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	// Get current rotation
+	const FRotator OldRotation = GetActorRotation();
+
+	// Are we aiming with mouse?
+	if (bUsingMouse)
+	{
+		if (APlayerController* PC = Cast<APlayerController>(GetController()))
+		{
+			// Get cursor world location
+			FHitResult OutHit;
+			PC->GetHitResultUnderCursorByChannel(MouseAimTraceChannel, true, OutHit);
+
+			// Find the aim rotation
+			const FVector Direction = OutHit.Location - GetActorLocation();
+			AimAngle = FMath::RadiansToDegrees(FMath::Atan2(Direction.Y, Direction.X));
+
+			// Update yaw, reuse pitch and roll
+			SetActorRotation(FRotator(OldRotation.Pitch, AimAngle, OldRotation.Roll));
+		}
+	}
+	else
+	{
+		// Smoothly interpolate to aim angle when using stick
+		const FRotator TargetRotation(OldRotation.Pitch, AimAngle, OldRotation.Roll);
+		const FRotator NewRotation = FMath::RInterpTo(OldRotation, TargetRotation, DeltaTime, AimRotationInterpSpeed);
+		SetActorRotation(NewRotation);
+	}
 }
 
 void AFarmingCharacter::CreateNewCharacter(const FString& CharacterName, const FName& SpeciesID, ECharacterGender Gender)
@@ -196,6 +233,18 @@ void AFarmingCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 		{
 			EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, this, &AFarmingCharacter::Interact);
 		}
+
+		// Bind mouse aim action
+		if (MouseAimAction)
+		{
+			EnhancedInputComponent->BindAction(MouseAimAction, ETriggerEvent::Triggered, this, &AFarmingCharacter::MouseAim);
+		}
+
+		// Bind stick aim action
+		if (StickAimAction)
+		{
+			EnhancedInputComponent->BindAction(StickAimAction, ETriggerEvent::Triggered, this, &AFarmingCharacter::StickAim);
+		}
 	}
 }
 
@@ -226,5 +275,39 @@ void AFarmingCharacter::Interact(const FInputActionValue& Value)
 	if (AFarmingPlayerController* PC = Cast<AFarmingPlayerController>(GetController()))
 	{
 		PC->TriggerInteraction();
+	}
+}
+
+void AFarmingCharacter::MouseAim(const FInputActionValue& Value)
+{
+	// Enable mouse aiming mode
+	bUsingMouse = true;
+
+	// Show mouse cursor
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		PC->SetShowMouseCursor(true);
+	}
+}
+
+void AFarmingCharacter::StickAim(const FInputActionValue& Value)
+{
+	// Get stick input
+	const FVector2D AimInput = Value.Get<FVector2D>();
+
+	// Only process if stick is being used
+	if (AimInput.SizeSquared() > 0.1f)
+	{
+		// Calculate aim angle from stick input
+		AimAngle = FMath::RadiansToDegrees(FMath::Atan2(AimInput.Y, AimInput.X));
+
+		// Disable mouse mode
+		bUsingMouse = false;
+
+		// Hide mouse cursor
+		if (APlayerController* PC = Cast<APlayerController>(GetController()))
+		{
+			PC->SetShowMouseCursor(false);
+		}
 	}
 }

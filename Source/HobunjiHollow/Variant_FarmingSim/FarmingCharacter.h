@@ -31,6 +31,9 @@ protected:
 	virtual void BeginPlay() override;
 
 public:
+	/** Updates rotation to face aim direction */
+	virtual void Tick(float DeltaTime) override;
+
 	/** Setup input bindings */
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
@@ -43,11 +46,39 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputAction* InteractAction;
 
+	/** Mouse aim input action */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* MouseAimAction;
+
+	/** Gamepad aim input action (right stick) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* StickAimAction;
+
+	/** Trace channel to use for mouse aim */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	TEnumAsByte<ETraceTypeQuery> MouseAimTraceChannel;
+
+	/** Speed to blend between current rotation and target aim rotation */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Aim", meta = (ClampMin = 0, ClampMax = 100, Units = "s"))
+	float AimRotationInterpSpeed = 10.0f;
+
 	/** Handles movement input */
 	void Move(const FInputActionValue& Value);
 
 	/** Handles interact input */
 	void Interact(const FInputActionValue& Value);
+
+	/** Handles mouse aim input */
+	void MouseAim(const FInputActionValue& Value);
+
+	/** Handles stick aim input */
+	void StickAim(const FInputActionValue& Value);
+
+	/** Current aim yaw angle */
+	float AimAngle = 0.0f;
+
+	/** If true, player is using mouse aim */
+	bool bUsingMouse = false;
 
 public:
 	/** Top-down camera */
