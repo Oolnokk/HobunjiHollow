@@ -31,7 +31,10 @@ public:
 
 	/** Add item to inventory (auto-stacks and finds empty slots) */
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
-	bool AddItem(UItemData* ItemData, int32 Quantity = 1, int32& RemainingQuantity);
+	bool AddItem(UItemData* ItemData, int32 Quantity = 1);
+
+	/** Add item to inventory with remaining quantity output (C++ version) */
+	bool AddItemWithRemainder(UItemData* ItemData, int32 Quantity, int32& RemainingQuantity);
 
 	/** Remove item from inventory by item data */
 	UFUNCTION(BlueprintCallable, Category = "Inventory")

@@ -52,6 +52,7 @@ struct FGameTime
 		case ESeason::Summer: SeasonStr = TEXT("Summer"); break;
 		case ESeason::Fall: SeasonStr = TEXT("Fall"); break;
 		case ESeason::Winter: SeasonStr = TEXT("Winter"); break;
+		default: SeasonStr = TEXT("Unknown"); break;
 		}
 		return FString::Printf(TEXT("Year %d, %s Day %d, %02d:%02d"), Year, *SeasonStr, Day, Hour, Minute);
 	}

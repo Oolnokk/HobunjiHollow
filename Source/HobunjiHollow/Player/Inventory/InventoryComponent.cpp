@@ -42,7 +42,13 @@ void UInventoryComponent::InitializeInventory(int32 NumSlots)
 	UE_LOG(LogHobunjiInventory, Log, TEXT("InventoryComponent: ========================================"));
 }
 
-bool UInventoryComponent::AddItem(UItemData* ItemData, int32 Quantity, int32& RemainingQuantity)
+bool UInventoryComponent::AddItem(UItemData* ItemData, int32 Quantity)
+{
+	int32 RemainingQuantity = 0;
+	return AddItemWithRemainder(ItemData, Quantity, RemainingQuantity);
+}
+
+bool UInventoryComponent::AddItemWithRemainder(UItemData* ItemData, int32 Quantity, int32& RemainingQuantity)
 {
 	if (!ItemData)
 	{
