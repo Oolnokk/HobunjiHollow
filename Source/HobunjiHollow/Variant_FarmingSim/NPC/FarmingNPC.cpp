@@ -26,9 +26,9 @@ void AFarmingNPC::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 }
 
-void AFarmingNPC::Interact_Implementation(AActor* Instigator)
+void AFarmingNPC::Interact_Implementation(AActor* InteractingActor)
 {
-	StartConversation(Instigator);
+	StartConversation(InteractingActor);
 }
 
 FText AFarmingNPC::GetInteractionPrompt_Implementation() const
@@ -36,7 +36,7 @@ FText AFarmingNPC::GetInteractionPrompt_Implementation() const
 	return FText::Format(FText::FromString(TEXT("Talk to {0}")), DisplayName);
 }
 
-bool AFarmingNPC::CanInteract_Implementation(AActor* Instigator) const
+bool AFarmingNPC::CanInteract_Implementation(AActor* InteractingActor) const
 {
 	return true;
 }
@@ -61,8 +61,12 @@ int32 AFarmingNPC::GetFriendshipLevel() const
 
 int32 AFarmingNPC::GetFriendshipPoints() const
 {
-	FNPCRelationshipSave* Relationship = GetRelationshipData();
-	return Relationship ? Relationship->FriendshipPoints : 0;
+	FNPCRelationshipSave Relationship;
+	if (GetRelationshipData(Relationship))
+	{
+		return Relationship.FriendshipPoints;
+	}
+	return 0;
 }
 
 void AFarmingNPC::AddFriendshipPoints(int32 Points)
@@ -74,16 +78,16 @@ void AFarmingNPC::AddFriendshipPoints(int32 Points)
 	}
 
 	UFarmingWorldSaveGame* WorldSave = GameMode->GetWorldSave();
-	FNPCRelationshipSave* Relationship = WorldSave->GetNPCRelationship(NPCID);
+	FNPCRelationshipSave Relationship;
 
-	if (Relationship)
+	if (WorldSave->GetNPCRelationship(NPCID, Relationship))
 	{
-		int32 OldLevel = Relationship->FriendshipPoints / PointsPerHeartLevel;
-		Relationship->FriendshipPoints += Points;
-		int32 NewLevel = Relationship->FriendshipPoints / PointsPerHeartLevel;
+		int32 OldLevel = Relationship.FriendshipPoints / PointsPerHeartLevel;
+		Relationship.FriendshipPoints += Points;
+		int32 NewLevel = Relationship.FriendshipPoints / PointsPerHeartLevel;
 
 		UE_LOG(LogTemp, Log, TEXT("%s friendship: %d points (Level %d)"),
-			*DisplayName.ToString(), Relationship->FriendshipPoints, NewLevel);
+			*DisplayName.ToString(), Relationship.FriendshipPoints, NewLevel);
 
 		// Level up notification
 		if (NewLevel > OldLevel)
@@ -91,6 +95,8 @@ void AFarmingNPC::AddFriendshipPoints(int32 Points)
 			UE_LOG(LogTemp, Log, TEXT("%s reached friendship level %d!"),
 				*DisplayName.ToString(), NewLevel);
 		}
+
+		WorldSave->SetNPCRelationship(Relationship);
 	}
 	else
 	{
@@ -107,10 +113,10 @@ void AFarmingNPC::AddFriendshipPoints(int32 Points)
 
 bool AFarmingNPC::HasSeenDialogue(FName DialogueID) const
 {
-	FNPCRelationshipSave* Relationship = GetRelationshipData();
-	if (Relationship)
+	FNPCRelationshipSave Relationship;
+	if (GetRelationshipData(Relationship))
 	{
-		return Relationship->CompletedDialogues.Contains(DialogueID);
+		return Relationship.CompletedDialogues.Contains(DialogueID);
 	}
 	return false;
 }
@@ -124,13 +130,14 @@ void AFarmingNPC::MarkDialogueSeen(FName DialogueID)
 	}
 
 	UFarmingWorldSaveGame* WorldSave = GameMode->GetWorldSave();
-	FNPCRelationshipSave* Relationship = WorldSave->GetNPCRelationship(NPCID);
+	FNPCRelationshipSave Relationship;
 
-	if (Relationship)
+	if (WorldSave->GetNPCRelationship(NPCID, Relationship))
 	{
-		if (!Relationship->CompletedDialogues.Contains(DialogueID))
+		if (!Relationship.CompletedDialogues.Contains(DialogueID))
 		{
-			Relationship->CompletedDialogues.Add(DialogueID);
+			Relationship.CompletedDialogues.Add(DialogueID);
+			WorldSave->SetNPCRelationship(Relationship);
 			UE_LOG(LogTemp, Log, TEXT("%s dialogue completed: %s"),
 				*DisplayName.ToString(), *DialogueID.ToString());
 		}
@@ -156,14 +163,14 @@ void AFarmingNPC::UpdateSchedule(float CurrentTime, int32 CurrentDay, int32 Curr
 	}
 }
 
-FNPCRelationshipSave* AFarmingNPC::GetRelationshipData() const
+bool AFarmingNPC::GetRelationshipData(FNPCRelationshipSave& OutRelationship) const
 {
 	AFarmingGameMode* GameMode = Cast<AFarmingGameMode>(UGameplayStatics::GetGameMode(this));
 	if (GameMode && GameMode->GetWorldSave())
 	{
-		return GameMode->GetWorldSave()->GetNPCRelationship(NPCID);
+		return GameMode->GetWorldSave()->GetNPCRelationship(NPCID, OutRelationship);
 	}
-	return nullptr;
+	return false;
 }
 
 int32 AFarmingNPC::FindBestScheduleEntry(float CurrentTime, int32 CurrentDay, int32 CurrentSeason) const
@@ -226,7 +233,7 @@ void AFarmingNPC::MoveToScheduledLocation_Implementation(const FNPCScheduleEntry
 	}
 }
 
-void AFarmingNPC::StartConversation_Implementation(AActor* Instigator)
+void AFarmingNPC::StartConversation_Implementation(AActor* InteractingActor)
 {
 	// Default implementation - override in Blueprint to show dialogue UI
 	UE_LOG(LogTemp, Log, TEXT("Started conversation with %s (Friendship Level: %d)"),

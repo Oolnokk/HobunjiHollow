@@ -85,9 +85,9 @@ public:
 	int32 PointsPerHeartLevel = 250;
 
 	// IInteractable interface
-	virtual void Interact_Implementation(AActor* Instigator) override;
+	virtual void Interact_Implementation(AActor* InteractingActor) override;
 	virtual FText GetInteractionPrompt_Implementation() const override;
-	virtual bool CanInteract_Implementation(AActor* Instigator) const override;
+	virtual bool CanInteract_Implementation(AActor* InteractingActor) const override;
 	virtual void OnFocusGained_Implementation() override;
 	virtual void OnFocusLost_Implementation() override;
 
@@ -117,11 +117,11 @@ public:
 
 	/** Start conversation with this NPC */
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "NPC|Dialogue")
-	void StartConversation(AActor* Instigator);
+	void StartConversation(AActor* InteractingActor);
 
 protected:
 	/** Get relationship data from world save */
-	FNPCRelationshipSave* GetRelationshipData() const;
+	bool GetRelationshipData(FNPCRelationshipSave& OutRelationship) const;
 
 	/** Find the best matching schedule entry */
 	int32 FindBestScheduleEntry(float CurrentTime, int32 CurrentDay, int32 CurrentSeason) const;
