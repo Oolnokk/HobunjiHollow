@@ -134,7 +134,7 @@ public:
 
 	/** Get relationship data for an NPC */
 	UFUNCTION(BlueprintCallable, Category = "Save|NPCs")
-	FNPCRelationshipSave* GetNPCRelationship(FName NPCID);
+	bool GetNPCRelationship(FName NPCID, FNPCRelationshipSave& OutRelationship);
 
 	/** Set or update relationship data for an NPC */
 	UFUNCTION(BlueprintCallable, Category = "Save|NPCs")

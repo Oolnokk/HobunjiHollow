@@ -42,6 +42,10 @@ struct FSpeciesData : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Species|Mesh")
 	USkeletalMesh* FemaleSkeletalMesh;
 
+	/** Animation Blueprint for this species (optional, falls back to default if not set) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Species|Animation")
+	TSubclassOf<UAnimInstance> AnimationBlueprint;
+
 	/** Icon for this species in UI */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Species|UI")
 	UTexture2D* SpeciesIcon;

@@ -3,6 +3,7 @@
 #include "FarmingCharacter.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Inventory/InventoryComponent.h"
 #include "Inventory/GearInventoryComponent.h"
@@ -10,6 +11,11 @@
 #include "Data/SpeciesDatabase.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/DataTable.h"
+#include "EnhancedInputComponent.h"
+#include "EnhancedInputSubsystems.h"
+#include "InputAction.h"
+#include "FarmingPlayerController.h"
+#include "Kismet/KismetMathLibrary.h"
 
 AFarmingCharacter::AFarmingCharacter()
 {
@@ -38,12 +44,54 @@ AFarmingCharacter::AFarmingCharacter()
 	MainInventory = CreateDefaultSubobject<UInventoryComponent>(TEXT("MainInventory"));
 	GearInventory = CreateDefaultSubobject<UGearInventoryComponent>(TEXT("GearInventory"));
 
+	// Configure character movement
+	GetCharacterMovement()->bOrientRotationToMovement = false; // Controlled by aim instead
+	GetCharacterMovement()->RotationRate = FRotator(0.0f, 640.0f, 0.0f);
+	GetCharacterMovement()->bConstrainToPlane = true;
+	GetCharacterMovement()->bSnapToPlaneAtStart = true;
+
+	// Default mouse aim trace channel
+	MouseAimTraceChannel = UEngineTypes::ConvertToTraceType(ECC_Visibility);
+
 	PrimaryActorTick.bCanEverTick = true;
 }
 
 void AFarmingCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+}
+
+void AFarmingCharacter::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	// Get current rotation
+	const FRotator OldRotation = GetActorRotation();
+
+	// Are we aiming with mouse?
+	if (bUsingMouse)
+	{
+		if (APlayerController* PC = Cast<APlayerController>(GetController()))
+		{
+			// Get cursor world location
+			FHitResult OutHit;
+			PC->GetHitResultUnderCursorByChannel(MouseAimTraceChannel, true, OutHit);
+
+			// Find the aim rotation
+			const FVector Direction = OutHit.Location - GetActorLocation();
+			AimAngle = FMath::RadiansToDegrees(FMath::Atan2(Direction.Y, Direction.X));
+
+			// Update yaw, reuse pitch and roll
+			SetActorRotation(FRotator(OldRotation.Pitch, AimAngle, OldRotation.Roll));
+		}
+	}
+	else
+	{
+		// Smoothly interpolate to aim angle when using stick
+		const FRotator TargetRotation(OldRotation.Pitch, AimAngle, OldRotation.Roll);
+		const FRotator NewRotation = FMath::RInterpTo(OldRotation, TargetRotation, DeltaTime, AimRotationInterpSpeed);
+		SetActorRotation(NewRotation);
+	}
 }
 
 void AFarmingCharacter::CreateNewCharacter(const FString& CharacterName, const FName& SpeciesID, ECharacterGender Gender)
@@ -130,6 +178,15 @@ void AFarmingCharacter::ApplySpeciesAppearance(const FName& SpeciesID, ECharacte
 		// Apply the skeletal mesh
 		GetMesh()->SetSkeletalMesh(SelectedMesh);
 
+		// Apply animation blueprint (species-specific or default)
+		TSubclassOf<UAnimInstance> AnimBP = SpeciesData.AnimationBlueprint ?
+			SpeciesData.AnimationBlueprint : DefaultAnimationBlueprint;
+
+		if (AnimBP)
+		{
+			GetMesh()->SetAnimInstanceClass(AnimBP);
+		}
+
 		UE_LOG(LogTemp, Log, TEXT("Applied species appearance: %s (%s)"),
 			*SpeciesData.DisplayName.ToString(),
 			Gender == ECharacterGender::Male ? TEXT("Male") : TEXT("Female"));
@@ -155,5 +212,60 @@ void AFarmingCharacter::RestoreFromSave()
 	if (GearInventory)
 	{
 		GearInventory->RestoreFromCharacterSave(CharacterSave);
+	}
+}
+
+void AFarmingCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+{
+	Super::SetupPlayerInputComponent(PlayerInputComponent);
+
+	// Get the enhanced input component
+	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent))
+	{
+		// Bind mouse aim action
+		if (MouseAimAction)
+		{
+			EnhancedInputComponent->BindAction(MouseAimAction, ETriggerEvent::Triggered, this, &AFarmingCharacter::MouseAim);
+		}
+
+		// Bind stick aim action
+		if (StickAimAction)
+		{
+			EnhancedInputComponent->BindAction(StickAimAction, ETriggerEvent::Triggered, this, &AFarmingCharacter::StickAim);
+		}
+	}
+}
+
+void AFarmingCharacter::MouseAim(const FInputActionValue& Value)
+{
+	// Enable mouse aiming mode
+	bUsingMouse = true;
+
+	// Show mouse cursor
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		PC->SetShowMouseCursor(true);
+	}
+}
+
+void AFarmingCharacter::StickAim(const FInputActionValue& Value)
+{
+	// Get stick input
+	const FVector2D AimInput = Value.Get<FVector2D>();
+
+	// Only process if stick is being used
+	if (AimInput.SizeSquared() > 0.1f)
+	{
+		// Calculate aim angle from stick input
+		AimAngle = FMath::RadiansToDegrees(FMath::Atan2(AimInput.Y, AimInput.X));
+
+		// Disable mouse mode
+		bUsingMouse = false;
+
+		// Hide mouse cursor
+		if (APlayerController* PC = Cast<APlayerController>(GetController()))
+		{
+			PC->SetShowMouseCursor(false);
+		}
 	}
 }

@@ -33,17 +33,18 @@ void UFarmingWorldSaveGame::InitializeNewWorld()
 	UE_LOG(LogTemp, Log, TEXT("Initialized new world save: %s"), *WorldName);
 }
 
-FNPCRelationshipSave* UFarmingWorldSaveGame::GetNPCRelationship(FName NPCID)
+bool UFarmingWorldSaveGame::GetNPCRelationship(FName NPCID, FNPCRelationshipSave& OutRelationship)
 {
-	for (FNPCRelationshipSave& Relationship : NPCRelationships)
+	for (const FNPCRelationshipSave& Relationship : NPCRelationships)
 	{
 		if (Relationship.NPCID == NPCID)
 		{
-			return &Relationship;
+			OutRelationship = Relationship;
+			return true;
 		}
 	}
 
-	return nullptr;
+	return false;
 }
 
 void UFarmingWorldSaveGame::SetNPCRelationship(const FNPCRelationshipSave& Relationship)

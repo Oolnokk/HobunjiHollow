@@ -22,7 +22,7 @@ class HOBUNJIHOLLOW_API IInteractable
 public:
 	/** Called when the player interacts with this object */
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Interaction")
-	void Interact(AActor* Instigator);
+	void Interact(AActor* InteractingActor);
 
 	/** Get the display name shown to the player */
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Interaction")
@@ -30,7 +30,7 @@ public:
 
 	/** Check if this object can currently be interacted with */
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Interaction")
-	bool CanInteract(AActor* Instigator) const;
+	bool CanInteract(AActor* InteractingActor) const;
 
 	/** Called when the player's cursor/focus enters this object */
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Interaction")
