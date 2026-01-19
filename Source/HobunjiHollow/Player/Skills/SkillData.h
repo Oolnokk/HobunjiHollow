@@ -52,7 +52,6 @@ struct FSkillProgress
 	 * Calculate XP required for next level
 	 * Formula: Base (100) * Level * Multiplier (1.5)
 	 */
-	UFUNCTION(BlueprintPure, Category = "Skill")
 	int32 GetXPForNextLevel() const
 	{
 		if (Level >= 10) return 0; // Max level
@@ -62,7 +61,6 @@ struct FSkillProgress
 	/**
 	 * Calculate total XP required to reach a specific level
 	 */
-	UFUNCTION(BlueprintPure, Category = "Skill")
 	int32 GetTotalXPForLevel(int32 TargetLevel) const
 	{
 		int32 TotalRequired = 0;
@@ -76,7 +74,6 @@ struct FSkillProgress
 	/**
 	 * Get progress to next level as a percentage (0.0 - 1.0)
 	 */
-	UFUNCTION(BlueprintPure, Category = "Skill")
 	float GetProgressToNextLevel() const
 	{
 		if (Level >= 10) return 1.0f;
@@ -88,7 +85,6 @@ struct FSkillProgress
 	/**
 	 * Check if at max level
 	 */
-	UFUNCTION(BlueprintPure, Category = "Skill")
 	bool IsMaxLevel() const
 	{
 		return Level >= 10;

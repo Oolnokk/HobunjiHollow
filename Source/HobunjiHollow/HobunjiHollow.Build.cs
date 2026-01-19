@@ -28,12 +28,10 @@ public class HobunjiHollow : ModuleRules
 		PublicIncludePaths.AddRange(new string[] {
 			"HobunjiHollow",
 			"HobunjiHollow/Core",
-			"HobunjiHollow/Core/GameMode",
 			"HobunjiHollow/Core/GameState",
 			"HobunjiHollow/Core/TimeSystem",
 			"HobunjiHollow/Core/SaveSystem",
 			"HobunjiHollow/Player",
-			"HobunjiHollow/Player/Character",
 			"HobunjiHollow/Player/Inventory",
 			"HobunjiHollow/Player/Skills",
 			"HobunjiHollow/UI",
