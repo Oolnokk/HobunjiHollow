@@ -57,7 +57,7 @@ public:
 	void UpdateWaterConeVisual(float ChargePercent);
 
 	// Get tool effectiveness (modified by skill level)
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Tool")
+	UFUNCTION(BlueprintPure, Category = "Tool")
 	float GetEffectiveness() const;
 
 	// Durability system (optional)
@@ -84,6 +84,6 @@ protected:
 	virtual void OnToolChargeStart_Implementation();
 	virtual void OnToolChargeRelease_Implementation(float ChargePercent);
 
-	UPROPERTY()
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tool")
 	class AHHPlayerCharacter* OwningPlayer;
 };

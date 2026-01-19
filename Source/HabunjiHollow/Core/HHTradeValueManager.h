@@ -60,10 +60,10 @@ public:
 	void RecalculateTradeValue();
 
 	// Check win condition
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Trade Value")
+	UFUNCTION(BlueprintPure, Category = "Trade Value")
 	bool HasReachedTarget() const;
 
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Trade Value")
+	UFUNCTION(BlueprintPure, Category = "Trade Value")
 	float GetProgressPercentage() const;
 
 	// Events

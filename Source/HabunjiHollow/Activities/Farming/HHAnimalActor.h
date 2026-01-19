@@ -11,7 +11,7 @@
  * Stub for animal companion/livestock
  * TODO: Fully implement animal system with affection and production
  */
-UCLASS()
+UCLASS(Blueprintable)
 class HABUNJIHOLLOW_API AHHAnimalActor : public APawn
 {
 	GENERATED_BODY()

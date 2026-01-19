@@ -39,7 +39,7 @@ public:
 	void AddExperience(ESkillType Skill, float Amount);
 
 	// Check if player has a talent
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Talents")
+	UFUNCTION(BlueprintPure, Category = "Talents")
 	bool HasTalent(FName TalentID) const;
 
 	// Unlock a talent
@@ -47,7 +47,7 @@ public:
 	void Server_UnlockTalent(FName TalentID);
 
 	// Get current skill level
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Skills")
+	UFUNCTION(BlueprintPure, Category = "Skills")
 	int32 GetSkillLevel(ESkillType Skill) const;
 
 	// Get available talents (based on skill levels)

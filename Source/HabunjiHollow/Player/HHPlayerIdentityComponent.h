@@ -53,11 +53,11 @@ public:
 	void UpdatePersonality();
 
 	// Get dominant personality trait
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Identity")
+	UFUNCTION(BlueprintPure, Category = "Identity")
 	EPersonalityTrait GetDominantTrait() const;
 
 	// Get personality score for trait
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Identity")
+	UFUNCTION(BlueprintPure, Category = "Identity")
 	float GetPersonalityScore(EPersonalityTrait Trait) const;
 
 	// Initialize identity
