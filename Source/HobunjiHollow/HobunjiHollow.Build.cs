@@ -23,7 +23,7 @@ public class HobunjiHollow : ModuleRules
 			"Slate"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { });
+		PrivateDependencyModuleNames.AddRange(new string[] { "SlateCore" });
 
 		PublicIncludePaths.AddRange(new string[] {
 			"HobunjiHollow",
@@ -34,9 +34,6 @@ public class HobunjiHollow : ModuleRules
 			"HobunjiHollow/Variant_TwinStick/Gameplay",
 			"HobunjiHollow/Variant_TwinStick/UI"
 		});
-
-		// Uncomment if you are using Slate UI
-		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
 
 		// Uncomment if you are using online features
 		// PrivateDependencyModuleNames.Add("OnlineSubsystem");
