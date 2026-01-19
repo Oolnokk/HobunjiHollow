@@ -1,0 +1,135 @@
+// Copyright Epic Games, Inc. All Rights Reserved.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/Character.h"
+#include "Interaction/Interactable.h"
+#include "FarmingNPC.generated.h"
+
+class UFarmingWorldSaveGame;
+class UDialogueData;
+
+/**
+ * Schedule entry defining where an NPC should be at a specific time
+ */
+USTRUCT(BlueprintType)
+struct FNPCScheduleEntry
+{
+	GENERATED_BODY()
+
+	/** Day of week (0=Monday, 6=Sunday, -1=Any day) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule")
+	int32 DayOfWeek = -1;
+
+	/** Season this schedule applies to (-1 = all seasons) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule")
+	int32 Season = -1;
+
+	/** Time of day to move to this location (in hours, 0-24) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule")
+	float TimeOfDay = 0.0f;
+
+	/** Target location name or tag */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule")
+	FName LocationTag;
+
+	/** Optional specific world position */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule")
+	FVector WorldPosition = FVector::ZeroVector;
+
+	/** Optional animation or activity at this location */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule")
+	FName Activity;
+};
+
+/**
+ * NPC character with schedule system, dialogue, and friendship tracking
+ */
+UCLASS(Blueprintable)
+class HOBUNJIHOLLOW_API AFarmingNPC : public ACharacter, public IInteractable
+{
+	GENERATED_BODY()
+
+public:
+	AFarmingNPC();
+
+protected:
+	virtual void BeginPlay() override;
+
+public:
+	virtual void Tick(float DeltaTime) override;
+
+	/** Unique NPC identifier */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC")
+	FName NPCID;
+
+	/** Display name */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC")
+	FText DisplayName;
+
+	/** NPC's daily schedule */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Schedule")
+	TArray<FNPCScheduleEntry> Schedule;
+
+	/** Current schedule entry being followed */
+	UPROPERTY(BlueprintReadOnly, Category = "NPC|Schedule")
+	int32 CurrentScheduleIndex = -1;
+
+	/** Reference to dialogue data asset */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Dialogue")
+	UDialogueData* DialogueData;
+
+	/** Friendship points required for each heart level */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Friendship")
+	int32 PointsPerHeartLevel = 250;
+
+	// IInteractable interface
+	virtual void Interact_Implementation(AActor* Instigator) override;
+	virtual FText GetInteractionPrompt_Implementation() const override;
+	virtual bool CanInteract_Implementation(AActor* Instigator) const override;
+	virtual void OnFocusGained_Implementation() override;
+	virtual void OnFocusLost_Implementation() override;
+
+	/** Get current friendship level (0-10 hearts) */
+	UFUNCTION(BlueprintCallable, Category = "NPC|Friendship")
+	int32 GetFriendshipLevel() const;
+
+	/** Get current friendship points */
+	UFUNCTION(BlueprintCallable, Category = "NPC|Friendship")
+	int32 GetFriendshipPoints() const;
+
+	/** Add friendship points */
+	UFUNCTION(BlueprintCallable, Category = "NPC|Friendship")
+	void AddFriendshipPoints(int32 Points);
+
+	/** Check if player has seen a specific dialogue */
+	UFUNCTION(BlueprintCallable, Category = "NPC|Dialogue")
+	bool HasSeenDialogue(FName DialogueID) const;
+
+	/** Mark a dialogue as seen */
+	UFUNCTION(BlueprintCallable, Category = "NPC|Dialogue")
+	void MarkDialogueSeen(FName DialogueID);
+
+	/** Update NPC schedule based on current time */
+	UFUNCTION(BlueprintCallable, Category = "NPC|Schedule")
+	void UpdateSchedule(float CurrentTime, int32 CurrentDay, int32 CurrentSeason);
+
+	/** Start conversation with this NPC */
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "NPC|Dialogue")
+	void StartConversation(AActor* Instigator);
+
+protected:
+	/** Get relationship data from world save */
+	FNPCRelationshipSave* GetRelationshipData() const;
+
+	/** Find the best matching schedule entry */
+	int32 FindBestScheduleEntry(float CurrentTime, int32 CurrentDay, int32 CurrentSeason) const;
+
+	/** Move to scheduled location */
+	UFUNCTION(BlueprintNativeEvent, Category = "NPC|Schedule")
+	void MoveToScheduledLocation(const FNPCScheduleEntry& ScheduleEntry);
+
+	/** Currently highlighted for interaction */
+	bool bIsHighlighted = false;
+};
