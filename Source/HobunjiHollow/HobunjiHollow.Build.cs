@@ -31,6 +31,7 @@ public class HobunjiHollow : ModuleRules
 			"HobunjiHollow/Core/GameMode",
 			"HobunjiHollow/Core/GameState",
 			"HobunjiHollow/Core/TimeSystem",
+			"HobunjiHollow/Core/SaveSystem",
 			"HobunjiHollow/Player",
 			"HobunjiHollow/Player/Character",
 			"HobunjiHollow/Player/Inventory",

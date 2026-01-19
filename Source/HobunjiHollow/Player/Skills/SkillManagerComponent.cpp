@@ -176,6 +176,28 @@ void USkillManagerComponent::DebugPrintSkills() const
 	UE_LOG(LogHobunjiSkills, Log, TEXT("========================================"));
 }
 
+void USkillManagerComponent::SetAllSkills(const TMap<ESkillType, FSkillProgress>& InSkills)
+{
+	UE_LOG(LogHobunjiSkills, Log, TEXT("SkillManagerComponent: Setting all skills from save data"));
+	UE_LOG(LogHobunjiSkills, Log, TEXT("  Skills to restore: %d"), InSkills.Num());
+
+	Skills = InSkills;
+	bInitialized = true;
+
+	UE_LOG(LogHobunjiSkills, Log, TEXT("SkillManagerComponent: Skills restored successfully"));
+
+	// Log restored skills
+	for (const auto& SkillPair : Skills)
+	{
+		const FSkillProgress& Skill = SkillPair.Value;
+		UE_LOG(LogHobunjiSkills, Verbose, TEXT("  %s: Level %d, XP: %d/%d"),
+			*Skill.GetSkillName(),
+			Skill.Level,
+			Skill.CurrentXP,
+			Skill.GetXPForNextLevel());
+	}
+}
+
 void USkillManagerComponent::CheckLevelUp(ESkillType SkillType)
 {
 	if (!Skills.Contains(SkillType))

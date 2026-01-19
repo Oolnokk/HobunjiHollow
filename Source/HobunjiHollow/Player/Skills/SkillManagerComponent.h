@@ -52,6 +52,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Skills")
 	TMap<ESkillType, FSkillProgress> GetAllSkills() const { return Skills; }
 
+	/** Set all skills from save data */
+	UFUNCTION(BlueprintCallable, Category = "Skills")
+	void SetAllSkills(const TMap<ESkillType, FSkillProgress>& InSkills);
+
 	/** Debug: Print all skills to log */
 	UFUNCTION(BlueprintCallable, Category = "Skills|Debug")
 	void DebugPrintSkills() const;
