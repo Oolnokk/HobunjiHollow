@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "WorldSaveGame.h"
+#include "Core/TimeSystem/TimeManager.h"
 
 DEFINE_LOG_CATEGORY(LogHobunjiSave);
 
