@@ -12,6 +12,8 @@ class USpringArmComponent;
 class UFarmingCharacterSaveGame;
 class UInventoryComponent;
 class UGearInventoryComponent;
+class UInputAction;
+struct FInputActionValue;
 
 /**
  * Player character for the farming simulation
@@ -27,6 +29,25 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+
+public:
+	/** Setup input bindings */
+	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+
+protected:
+	/** Movement input action */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* MoveAction;
+
+	/** Interact input action */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* InteractAction;
+
+	/** Handles movement input */
+	void Move(const FInputActionValue& Value);
+
+	/** Handles interact input */
+	void Interact(const FInputActionValue& Value);
 
 public:
 	/** Top-down camera */

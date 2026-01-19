@@ -3,6 +3,7 @@
 #include "FarmingCharacter.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Inventory/InventoryComponent.h"
 #include "Inventory/GearInventoryComponent.h"
@@ -10,6 +11,10 @@
 #include "Data/SpeciesDatabase.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/DataTable.h"
+#include "EnhancedInputComponent.h"
+#include "EnhancedInputSubsystems.h"
+#include "InputAction.h"
+#include "FarmingPlayerController.h"
 
 AFarmingCharacter::AFarmingCharacter()
 {
@@ -37,6 +42,12 @@ AFarmingCharacter::AFarmingCharacter()
 	// Create inventory components
 	MainInventory = CreateDefaultSubobject<UInventoryComponent>(TEXT("MainInventory"));
 	GearInventory = CreateDefaultSubobject<UGearInventoryComponent>(TEXT("GearInventory"));
+
+	// Configure character movement
+	GetCharacterMovement()->bOrientRotationToMovement = true;
+	GetCharacterMovement()->RotationRate = FRotator(0.0f, 640.0f, 0.0f);
+	GetCharacterMovement()->bConstrainToPlane = true;
+	GetCharacterMovement()->bSnapToPlaneAtStart = true;
 
 	PrimaryActorTick.bCanEverTick = true;
 }
@@ -155,5 +166,56 @@ void AFarmingCharacter::RestoreFromSave()
 	if (GearInventory)
 	{
 		GearInventory->RestoreFromCharacterSave(CharacterSave);
+	}
+}
+
+void AFarmingCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+{
+	Super::SetupPlayerInputComponent(PlayerInputComponent);
+
+	// Get the enhanced input component
+	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent))
+	{
+		// Bind movement action
+		if (MoveAction)
+		{
+			EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AFarmingCharacter::Move);
+		}
+
+		// Bind interact action
+		if (InteractAction)
+		{
+			EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, this, &AFarmingCharacter::Interact);
+		}
+	}
+}
+
+void AFarmingCharacter::Move(const FInputActionValue& Value)
+{
+	// Get the input vector (X = forward/back, Y = right/left)
+	const FVector2D MovementVector = Value.Get<FVector2D>();
+
+	if (Controller != nullptr)
+	{
+		// Get the control rotation (camera direction)
+		const FRotator Rotation = Controller->GetControlRotation();
+		const FRotator YawRotation(0, Rotation.Yaw, 0);
+
+		// Get forward and right vectors
+		const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+		const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+
+		// Add movement
+		AddMovementInput(ForwardDirection, MovementVector.Y);
+		AddMovementInput(RightDirection, MovementVector.X);
+	}
+}
+
+void AFarmingCharacter::Interact(const FInputActionValue& Value)
+{
+	// Get the player controller and trigger interaction
+	if (AFarmingPlayerController* PC = Cast<AFarmingPlayerController>(GetController()))
+	{
+		PC->TriggerInteraction();
 	}
 }
