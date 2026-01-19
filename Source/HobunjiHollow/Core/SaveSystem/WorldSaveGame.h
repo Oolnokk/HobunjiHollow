@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/SaveGame.h"
-#include "Core/TimeSystem/TimeManager.h"
+#include "Core/TimeSystem/GameTimeData.h"
 #include "WorldSaveGame.generated.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogHobunjiSave, Log, All);
