@@ -32,7 +32,15 @@ public class HobunjiHollow : ModuleRules
 			"HobunjiHollow/Variant_TwinStick",
 			"HobunjiHollow/Variant_TwinStick/AI",
 			"HobunjiHollow/Variant_TwinStick/Gameplay",
-			"HobunjiHollow/Variant_TwinStick/UI"
+			"HobunjiHollow/Variant_TwinStick/UI",
+			"HobunjiHollow/Variant_FarmingSim",
+			"HobunjiHollow/Variant_FarmingSim/Data",
+			"HobunjiHollow/Variant_FarmingSim/Save",
+			"HobunjiHollow/Variant_FarmingSim/Inventory",
+			"HobunjiHollow/Variant_FarmingSim/Interaction",
+			"HobunjiHollow/Variant_FarmingSim/NPC",
+			"HobunjiHollow/Variant_FarmingSim/Dialogue",
+			"HobunjiHollow/Variant_FarmingSim/UI"
 		});
 
 		// Uncomment if you are using online features
