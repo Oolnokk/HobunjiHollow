@@ -38,14 +38,6 @@ public:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
 protected:
-	/** Movement input action */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
-	UInputAction* MoveAction;
-
-	/** Interact input action */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
-	UInputAction* InteractAction;
-
 	/** Mouse aim input action */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputAction* MouseAimAction;
@@ -61,12 +53,6 @@ protected:
 	/** Speed to blend between current rotation and target aim rotation */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Aim", meta = (ClampMin = 0, ClampMax = 100, Units = "s"))
 	float AimRotationInterpSpeed = 10.0f;
-
-	/** Handles movement input */
-	void Move(const FInputActionValue& Value);
-
-	/** Handles interact input */
-	void Interact(const FInputActionValue& Value);
 
 	/** Handles mouse aim input */
 	void MouseAim(const FInputActionValue& Value);

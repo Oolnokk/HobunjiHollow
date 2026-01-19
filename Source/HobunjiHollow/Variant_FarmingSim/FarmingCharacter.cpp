@@ -222,18 +222,6 @@ void AFarmingCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	// Get the enhanced input component
 	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
-		// Bind movement action
-		if (MoveAction)
-		{
-			EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AFarmingCharacter::Move);
-		}
-
-		// Bind interact action
-		if (InteractAction)
-		{
-			EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, this, &AFarmingCharacter::Interact);
-		}
-
 		// Bind mouse aim action
 		if (MouseAimAction)
 		{
@@ -245,36 +233,6 @@ void AFarmingCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 		{
 			EnhancedInputComponent->BindAction(StickAimAction, ETriggerEvent::Triggered, this, &AFarmingCharacter::StickAim);
 		}
-	}
-}
-
-void AFarmingCharacter::Move(const FInputActionValue& Value)
-{
-	// Get the input vector (X = forward/back, Y = right/left)
-	const FVector2D MovementVector = Value.Get<FVector2D>();
-
-	if (Controller != nullptr)
-	{
-		// Get the control rotation (camera direction)
-		const FRotator Rotation = Controller->GetControlRotation();
-		const FRotator YawRotation(0, Rotation.Yaw, 0);
-
-		// Get forward and right vectors
-		const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
-		const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
-
-		// Add movement
-		AddMovementInput(ForwardDirection, MovementVector.Y);
-		AddMovementInput(RightDirection, MovementVector.X);
-	}
-}
-
-void AFarmingCharacter::Interact(const FInputActionValue& Value)
-{
-	// Get the player controller and trigger interaction
-	if (AFarmingPlayerController* PC = Cast<AFarmingPlayerController>(GetController()))
-	{
-		PC->TriggerInteraction();
 	}
 }
 
