@@ -107,6 +107,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Farming|Character")
 	void ApplySpeciesAppearance(const FName& SpeciesID, ECharacterGender Gender);
 
+	/** Debug: Show player info above character */
+	UFUNCTION(BlueprintCallable, Category = "Farming|Debug")
+	void DebugShowPlayerInfo();
+
 protected:
 	/** Current character save data */
 	UPROPERTY(BlueprintReadOnly, Category = "Farming|Save")

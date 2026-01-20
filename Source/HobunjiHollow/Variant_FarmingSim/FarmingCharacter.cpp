@@ -63,6 +63,23 @@ AFarmingCharacter::AFarmingCharacter()
 void AFarmingCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Debug: Log character spawn info
+	FString RoleStr = HasAuthority() ? TEXT("Server") : TEXT("Client");
+	FString LocalStr = IsLocallyControlled() ? TEXT("Local") : TEXT("Remote");
+	UE_LOG(LogTemp, Warning, TEXT("FarmingCharacter spawned: %s, %s, Replicates=%d, Location=%s"),
+		*RoleStr, *LocalStr, bReplicates, *GetActorLocation().ToString());
+
+	// Debug: Check if mesh is valid
+	if (GetMesh())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("  Mesh: %s, Visible=%d, ComponentReplicates=%d"),
+			*GetMesh()->GetName(), GetMesh()->IsVisible(), GetMesh()->GetIsReplicated());
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("  Mesh is NULL!"));
+	}
 }
 
 void AFarmingCharacter::Tick(float DeltaTime)
