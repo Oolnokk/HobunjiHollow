@@ -76,3 +76,4 @@ DerivedDataCache/
 # Rider
 .idea/
 *. sln.iml
+/.vs
