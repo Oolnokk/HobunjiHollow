@@ -16,11 +16,16 @@
 #include "InputAction.h"
 #include "FarmingPlayerController.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "Net/UnrealNetwork.h"
 
 AFarmingCharacter::AFarmingCharacter()
 {
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
+
+	// Enable replication for multiplayer
+	bReplicates = true;
+	// Note: Movement replication is enabled by default on ACharacter
 
 	// Don't rotate character to camera direction
 	bUseControllerRotationPitch = false;
@@ -56,14 +61,55 @@ AFarmingCharacter::AFarmingCharacter()
 	PrimaryActorTick.bCanEverTick = true;
 }
 
+void AFarmingCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	// Replicate species appearance data to all clients
+	DOREPLIFETIME(AFarmingCharacter, ReplicatedSpeciesID);
+	DOREPLIFETIME(AFarmingCharacter, ReplicatedGender);
+}
+
 void AFarmingCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Debug: Log character spawn info
+	FString RoleStr = HasAuthority() ? TEXT("Server") : TEXT("Client");
+	FString LocalStr = IsLocallyControlled() ? TEXT("Local") : TEXT("Remote");
+	UE_LOG(LogTemp, Warning, TEXT("FarmingCharacter spawned: %s, %s, Replicates=%d, Location=%s"),
+		*RoleStr, *LocalStr, bReplicates, *GetActorLocation().ToString());
+
+	// Debug: Check if mesh is valid
+	if (GetMesh())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("  Mesh: %s, Visible=%d, ComponentReplicates=%d, SpeciesID=%s"),
+			*GetMesh()->GetName(), GetMesh()->IsVisible(), GetMesh()->GetIsReplicated(),
+			*ReplicatedSpeciesID.ToString());
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("  Mesh is NULL!"));
+	}
+}
+
+void AFarmingCharacter::OnRep_SpeciesData()
+{
+	// Called on clients when species data is replicated
+	UE_LOG(LogTemp, Log, TEXT("OnRep_SpeciesData: Applying appearance for %s"), *ReplicatedSpeciesID.ToString());
+	ApplySpeciesAppearance(ReplicatedSpeciesID, ReplicatedGender);
 }
 
 void AFarmingCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	// Only update rotation on locally controlled characters
+	// Movement replication will handle syncing to other clients
+	if (!IsLocallyControlled())
+	{
+		return;
+	}
 
 	// Get current rotation
 	const FRotator OldRotation = GetActorRotation();
@@ -104,8 +150,19 @@ void AFarmingCharacter::CreateNewCharacter(const FString& CharacterName, const F
 		CharacterSave->Gender = Gender;
 		CharacterSave->InitializeNewCharacter();
 
-		// Apply species appearance
-		ApplySpeciesAppearance(SpeciesID, Gender);
+		// Set species on server (will replicate to all clients)
+		if (HasAuthority())
+		{
+			// We're on the server, set directly
+			ReplicatedSpeciesID = SpeciesID;
+			ReplicatedGender = Gender;
+			ApplySpeciesAppearance(SpeciesID, Gender);
+		}
+		else
+		{
+			// We're on a client, tell the server via RPC
+			ServerSetSpecies(SpeciesID, Gender);
+		}
 
 		UE_LOG(LogTemp, Log, TEXT("Created new character: %s (Species: %s, Gender: %d)"), *CharacterName, *SpeciesID.ToString(), (int32)Gender);
 	}
@@ -122,6 +179,20 @@ bool AFarmingCharacter::LoadCharacter(const FString& CharacterName)
 		if (CharacterSave)
 		{
 			UE_LOG(LogTemp, Log, TEXT("Loaded character: %s"), *CharacterName);
+
+			// Set species on server (will replicate to all clients)
+			if (HasAuthority())
+			{
+				// We're on the server, set directly
+				ReplicatedSpeciesID = CharacterSave->SpeciesID;
+				ReplicatedGender = CharacterSave->Gender;
+			}
+			else
+			{
+				// We're on a client, tell the server via RPC
+				ServerSetSpecies(CharacterSave->SpeciesID, CharacterSave->Gender);
+			}
+
 			RestoreFromSave();
 			return true;
 		}
@@ -161,6 +232,23 @@ bool AFarmingCharacter::SaveCharacter()
 	return bSuccess;
 }
 
+void AFarmingCharacter::ServerSetSpecies_Implementation(const FName& SpeciesID, ECharacterGender Gender)
+{
+	// Server only - set replicated properties
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("Server: Setting species to %s for character"), *SpeciesID.ToString());
+
+	ReplicatedSpeciesID = SpeciesID;
+	ReplicatedGender = Gender;
+
+	// Apply locally on server
+	ApplySpeciesAppearance(SpeciesID, Gender);
+}
+
 void AFarmingCharacter::ApplySpeciesAppearance(const FName& SpeciesID, ECharacterGender Gender)
 {
 	// Get species data
@@ -196,6 +284,19 @@ void AFarmingCharacter::ApplySpeciesAppearance(const FName& SpeciesID, ECharacte
 		UE_LOG(LogTemp, Warning, TEXT("Missing skeletal mesh for species %s (Gender: %d)"),
 			*SpeciesID.ToString(), (int32)Gender);
 	}
+}
+
+void AFarmingCharacter::DebugShowPlayerInfo()
+{
+	// Debug function to show player info
+	FString RoleStr = HasAuthority() ? TEXT("Server") : TEXT("Client");
+	FString LocalStr = IsLocallyControlled() ? TEXT("Local") : TEXT("Remote");
+
+	UE_LOG(LogTemp, Warning, TEXT("=== Player Debug Info ==="));
+	UE_LOG(LogTemp, Warning, TEXT("Role: %s, Control: %s"), *RoleStr, *LocalStr);
+	UE_LOG(LogTemp, Warning, TEXT("Species: %s, Gender: %d"), *ReplicatedSpeciesID.ToString(), (int32)ReplicatedGender);
+	UE_LOG(LogTemp, Warning, TEXT("Location: %s"), *GetActorLocation().ToString());
+	UE_LOG(LogTemp, Warning, TEXT("Mesh: %s"), GetMesh() ? *GetMesh()->GetName() : TEXT("NULL"));
 }
 
 void AFarmingCharacter::RestoreFromSave()
