@@ -8,6 +8,8 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Interaction/Interactable.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "Kismet/GameplayStatics.h"
+#include "FarmingCharacter.h"
 
 AFarmingPlayerController::AFarmingPlayerController()
 {
@@ -28,6 +30,12 @@ void AFarmingPlayerController::BeginPlay()
 		{
 			Subsystem->AddMappingContext(DefaultMappingContext, 0);
 		}
+	}
+
+	// Check if we need to show character creation onboarding
+	if (IsLocalController() && NeedsCharacterCreation())
+	{
+		ShowCharacterCreator();
 	}
 }
 
@@ -182,5 +190,59 @@ void AFarmingPlayerController::UpdateInteractableFocus()
 		{
 			IInteractable::Execute_OnFocusGained(CurrentInteractable);
 		}
+	}
+}
+
+bool AFarmingPlayerController::NeedsCharacterCreation() const
+{
+	// If we've already completed character creation this session, don't show it again
+	if (bCharacterCreationCompleted)
+	{
+		return false;
+	}
+
+	// Check if we have a character name stored (could be from previous session)
+	if (!CurrentCharacterName.IsEmpty())
+	{
+		// Verify the save file exists
+		FString SlotName = FString::Printf(TEXT("Character_%s"), *CurrentCharacterName);
+		if (UGameplayStatics::DoesSaveGameExist(SlotName, 0))
+		{
+			return false;
+		}
+	}
+
+	// No character exists, need to create one
+	return true;
+}
+
+void AFarmingPlayerController::ShowCharacterCreator_Implementation()
+{
+	// Default implementation - override in Blueprint to show UI
+	UE_LOG(LogTemp, Log, TEXT("ShowCharacterCreator called - implement in Blueprint to show UI"));
+}
+
+void AFarmingPlayerController::OnCharacterCreationCompleted(const FString& CharacterName, FName SpeciesID, ECharacterGender Gender)
+{
+	UE_LOG(LogTemp, Log, TEXT("Character creation completed: %s (Species: %s, Gender: %d)"),
+		*CharacterName, *SpeciesID.ToString(), (int32)Gender);
+
+	// Store the character name
+	CurrentCharacterName = CharacterName;
+	bCharacterCreationCompleted = true;
+
+	// Create the character on the controlled pawn
+	if (AFarmingCharacter* FarmingChar = Cast<AFarmingCharacter>(GetPawn()))
+	{
+		FarmingChar->CreateNewCharacter(CharacterName, SpeciesID, Gender);
+
+		// Save the character to disk
+		FarmingChar->SaveCharacter();
+
+		UE_LOG(LogTemp, Log, TEXT("Character created and saved successfully"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Failed to create character - pawn is not a FarmingCharacter"));
 	}
 }

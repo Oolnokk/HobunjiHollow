@@ -10,6 +10,7 @@ class UInputMappingContext;
 class UInputAction;
 struct FInputActionValue;
 class IInteractable;
+enum class ECharacterGender : uint8;
 
 /**
  * Player controller for the farming simulation
@@ -57,6 +58,23 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Interaction")
 	AActor* GetFocusedInteractable() const { return CurrentInteractable; }
 
+	// Character Onboarding
+	/** Check if this player needs to create a character (no save exists) */
+	UFUNCTION(BlueprintCallable, Category = "Character")
+	bool NeedsCharacterCreation() const;
+
+	/** Show the character creator UI - implement in Blueprint */
+	UFUNCTION(BlueprintNativeEvent, Category = "Character")
+	void ShowCharacterCreator();
+
+	/** Called when character creation is completed */
+	UFUNCTION(BlueprintCallable, Category = "Character")
+	void OnCharacterCreationCompleted(const FString& CharacterName, FName SpeciesID, ECharacterGender Gender);
+
+	/** Get the name of the current character (if loaded) */
+	UFUNCTION(BlueprintPure, Category = "Character")
+	FString GetCurrentCharacterName() const { return CurrentCharacterName; }
+
 protected:
 	/** Handle movement input */
 	void OnMove(const FInputActionValue& Value);
@@ -76,4 +94,10 @@ protected:
 	/** Currently focused interactable actor */
 	UPROPERTY(BlueprintReadOnly, Category = "Interaction")
 	AActor* CurrentInteractable;
+
+	/** Name of the current character */
+	FString CurrentCharacterName;
+
+	/** Whether the character creation onboarding has been completed */
+	bool bCharacterCreationCompleted = false;
 };
