@@ -104,6 +104,13 @@ void AFarmingCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	// Only update rotation on locally controlled characters
+	// Movement replication will handle syncing to other clients
+	if (!IsLocallyControlled())
+	{
+		return;
+	}
+
 	// Get current rotation
 	const FRotator OldRotation = GetActorRotation();
 
