@@ -107,14 +107,33 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Farming|Character")
 	void ApplySpeciesAppearance(const FName& SpeciesID, ECharacterGender Gender);
 
+	/** Server RPC: Set character species (called by owning client) */
+	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Farming|Character")
+	void ServerSetSpecies(const FName& SpeciesID, ECharacterGender Gender);
+
 	/** Debug: Show player info above character */
 	UFUNCTION(BlueprintCallable, Category = "Farming|Debug")
 	void DebugShowPlayerInfo();
 
+	/** Setup replication */
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
 protected:
-	/** Current character save data */
+	/** Current character save data (local only, not replicated) */
 	UPROPERTY(BlueprintReadOnly, Category = "Farming|Save")
 	UFarmingCharacterSaveGame* CharacterSave;
+
+	/** Replicated species ID - determines character appearance */
+	UPROPERTY(ReplicatedUsing = OnRep_SpeciesData, BlueprintReadOnly, Category = "Farming|Character")
+	FName ReplicatedSpeciesID;
+
+	/** Replicated gender - determines character appearance */
+	UPROPERTY(ReplicatedUsing = OnRep_SpeciesData, BlueprintReadOnly, Category = "Farming|Character")
+	ECharacterGender ReplicatedGender = ECharacterGender::Male;
+
+	/** Called when species data is replicated to apply appearance */
+	UFUNCTION()
+	void OnRep_SpeciesData();
 
 	/** Restore character state from save data */
 	void RestoreFromSave();

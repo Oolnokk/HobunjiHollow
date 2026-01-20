@@ -16,6 +16,7 @@
 #include "InputAction.h"
 #include "FarmingPlayerController.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "Net/UnrealNetwork.h"
 
 AFarmingCharacter::AFarmingCharacter()
 {
@@ -60,6 +61,15 @@ AFarmingCharacter::AFarmingCharacter()
 	PrimaryActorTick.bCanEverTick = true;
 }
 
+void AFarmingCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	// Replicate species appearance data to all clients
+	DOREPLIFETIME(AFarmingCharacter, ReplicatedSpeciesID);
+	DOREPLIFETIME(AFarmingCharacter, ReplicatedGender);
+}
+
 void AFarmingCharacter::BeginPlay()
 {
 	Super::BeginPlay();
@@ -73,13 +83,21 @@ void AFarmingCharacter::BeginPlay()
 	// Debug: Check if mesh is valid
 	if (GetMesh())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("  Mesh: %s, Visible=%d, ComponentReplicates=%d"),
-			*GetMesh()->GetName(), GetMesh()->IsVisible(), GetMesh()->GetIsReplicated());
+		UE_LOG(LogTemp, Warning, TEXT("  Mesh: %s, Visible=%d, ComponentReplicates=%d, SpeciesID=%s"),
+			*GetMesh()->GetName(), GetMesh()->IsVisible(), GetMesh()->GetIsReplicated(),
+			*ReplicatedSpeciesID.ToString());
 	}
 	else
 	{
 		UE_LOG(LogTemp, Error, TEXT("  Mesh is NULL!"));
 	}
+}
+
+void AFarmingCharacter::OnRep_SpeciesData()
+{
+	// Called on clients when species data is replicated
+	UE_LOG(LogTemp, Log, TEXT("OnRep_SpeciesData: Applying appearance for %s"), *ReplicatedSpeciesID.ToString());
+	ApplySpeciesAppearance(ReplicatedSpeciesID, ReplicatedGender);
 }
 
 void AFarmingCharacter::Tick(float DeltaTime)
@@ -125,7 +143,14 @@ void AFarmingCharacter::CreateNewCharacter(const FString& CharacterName, const F
 		CharacterSave->Gender = Gender;
 		CharacterSave->InitializeNewCharacter();
 
-		// Apply species appearance
+		// Set replicated properties (server will replicate to all clients)
+		if (HasAuthority())
+		{
+			ReplicatedSpeciesID = SpeciesID;
+			ReplicatedGender = Gender;
+		}
+
+		// Apply species appearance locally
 		ApplySpeciesAppearance(SpeciesID, Gender);
 
 		UE_LOG(LogTemp, Log, TEXT("Created new character: %s (Species: %s, Gender: %d)"), *CharacterName, *SpeciesID.ToString(), (int32)Gender);
@@ -142,6 +167,13 @@ bool AFarmingCharacter::LoadCharacter(const FString& CharacterName)
 		CharacterSave = Cast<UFarmingCharacterSaveGame>(LoadedGame);
 		if (CharacterSave)
 		{
+			// Set replicated properties (server will replicate to all clients)
+			if (HasAuthority())
+			{
+				ReplicatedSpeciesID = CharacterSave->SpeciesID;
+				ReplicatedGender = CharacterSave->Gender;
+			}
+
 			UE_LOG(LogTemp, Log, TEXT("Loaded character: %s"), *CharacterName);
 			RestoreFromSave();
 			return true;
@@ -180,6 +212,23 @@ bool AFarmingCharacter::SaveCharacter()
 	}
 
 	return bSuccess;
+}
+
+void AFarmingCharacter::ServerSetSpecies_Implementation(const FName& SpeciesID, ECharacterGender Gender)
+{
+	// Server only - set replicated properties
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("Server: Setting species to %s for character"), *SpeciesID.ToString());
+
+	ReplicatedSpeciesID = SpeciesID;
+	ReplicatedGender = Gender;
+
+	// Apply locally on server
+	ApplySpeciesAppearance(SpeciesID, Gender);
 }
 
 void AFarmingCharacter::ApplySpeciesAppearance(const FName& SpeciesID, ECharacterGender Gender)
