@@ -9,7 +9,7 @@ AFarmingGameState::AFarmingGameState()
 	// Enable replication
 	bReplicates = true;
 	bAlwaysRelevant = true;
-	NetUpdateFrequency = 10.0f; // Update 10 times per second
+	SetNetUpdateFrequency(10.0f); // Update 10 times per second
 }
 
 void AFarmingGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

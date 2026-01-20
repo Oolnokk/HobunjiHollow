@@ -25,7 +25,7 @@ AFarmingCharacter::AFarmingCharacter()
 
 	// Enable replication for multiplayer
 	bReplicates = true;
-	bReplicateMovement = true;
+	// Note: Movement replication is enabled by default on ACharacter
 
 	// Don't rotate character to camera direction
 	bUseControllerRotationPitch = false;
