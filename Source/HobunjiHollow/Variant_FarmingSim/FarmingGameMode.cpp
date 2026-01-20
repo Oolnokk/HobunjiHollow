@@ -2,12 +2,18 @@
 
 #include "FarmingGameMode.h"
 #include "FarmingTimeManager.h"
+#include "FarmingPlayerState.h"
+#include "FarmingGameState.h"
 #include "Save/FarmingWorldSaveGame.h"
 #include "Kismet/GameplayStatics.h"
 
 AFarmingGameMode::AFarmingGameMode()
 {
 	PrimaryActorTick.bCanEverTick = false;
+
+	// Set multiplayer state classes
+	PlayerStateClass = AFarmingPlayerState::StaticClass();
+	GameStateClass = AFarmingGameState::StaticClass();
 }
 
 void AFarmingGameMode::BeginPlay()

@@ -22,6 +22,10 @@ AFarmingCharacter::AFarmingCharacter()
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
 
+	// Enable replication for multiplayer
+	bReplicates = true;
+	SetReplicateMovement(true);
+
 	// Don't rotate character to camera direction
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
