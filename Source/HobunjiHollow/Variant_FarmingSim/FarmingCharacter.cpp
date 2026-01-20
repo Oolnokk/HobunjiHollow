@@ -268,6 +268,19 @@ void AFarmingCharacter::ApplySpeciesAppearance(const FName& SpeciesID, ECharacte
 	}
 }
 
+void AFarmingCharacter::DebugShowPlayerInfo()
+{
+	// Debug function to show player info
+	FString RoleStr = HasAuthority() ? TEXT("Server") : TEXT("Client");
+	FString LocalStr = IsLocallyControlled() ? TEXT("Local") : TEXT("Remote");
+
+	UE_LOG(LogTemp, Warning, TEXT("=== Player Debug Info ==="));
+	UE_LOG(LogTemp, Warning, TEXT("Role: %s, Control: %s"), *RoleStr, *LocalStr);
+	UE_LOG(LogTemp, Warning, TEXT("Species: %s, Gender: %d"), *ReplicatedSpeciesID.ToString(), (int32)ReplicatedGender);
+	UE_LOG(LogTemp, Warning, TEXT("Location: %s"), *GetActorLocation().ToString());
+	UE_LOG(LogTemp, Warning, TEXT("Mesh: %s"), GetMesh() ? *GetMesh()->GetName() : TEXT("NULL"));
+}
+
 void AFarmingCharacter::RestoreFromSave()
 {
 	if (!CharacterSave)
