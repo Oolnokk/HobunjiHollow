@@ -150,15 +150,19 @@ void AFarmingCharacter::CreateNewCharacter(const FString& CharacterName, const F
 		CharacterSave->Gender = Gender;
 		CharacterSave->InitializeNewCharacter();
 
-		// Set replicated properties (server will replicate to all clients)
+		// Set species on server (will replicate to all clients)
 		if (HasAuthority())
 		{
+			// We're on the server, set directly
 			ReplicatedSpeciesID = SpeciesID;
 			ReplicatedGender = Gender;
+			ApplySpeciesAppearance(SpeciesID, Gender);
 		}
-
-		// Apply species appearance locally
-		ApplySpeciesAppearance(SpeciesID, Gender);
+		else
+		{
+			// We're on a client, tell the server via RPC
+			ServerSetSpecies(SpeciesID, Gender);
+		}
 
 		UE_LOG(LogTemp, Log, TEXT("Created new character: %s (Species: %s, Gender: %d)"), *CharacterName, *SpeciesID.ToString(), (int32)Gender);
 	}
@@ -174,14 +178,21 @@ bool AFarmingCharacter::LoadCharacter(const FString& CharacterName)
 		CharacterSave = Cast<UFarmingCharacterSaveGame>(LoadedGame);
 		if (CharacterSave)
 		{
-			// Set replicated properties (server will replicate to all clients)
+			UE_LOG(LogTemp, Log, TEXT("Loaded character: %s"), *CharacterName);
+
+			// Set species on server (will replicate to all clients)
 			if (HasAuthority())
 			{
+				// We're on the server, set directly
 				ReplicatedSpeciesID = CharacterSave->SpeciesID;
 				ReplicatedGender = CharacterSave->Gender;
 			}
+			else
+			{
+				// We're on a client, tell the server via RPC
+				ServerSetSpecies(CharacterSave->SpeciesID, CharacterSave->Gender);
+			}
 
-			UE_LOG(LogTemp, Log, TEXT("Loaded character: %s"), *CharacterName);
 			RestoreFromSave();
 			return true;
 		}
