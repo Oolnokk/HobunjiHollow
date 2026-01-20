@@ -1,7 +1,9 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "FarmingTimeManager.h"
+#include "FarmingGameState.h"
 #include "Save/FarmingWorldSaveGame.h"
+#include "Kismet/GameplayStatics.h"
 
 AFarmingTimeManager::AFarmingTimeManager()
 {
@@ -26,6 +28,12 @@ void AFarmingTimeManager::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	// Only update time on server
+	if (!HasAuthority())
+	{
+		return;
+	}
+
 	if (!bTimePaused)
 	{
 		UpdateTime(DeltaTime);
@@ -47,6 +55,12 @@ void AFarmingTimeManager::UpdateTime(float DeltaTime)
 		AdvanceDay();
 	}
 
+	// Sync to GameState (will replicate to clients)
+	if (AFarmingGameState* FarmingGameState = GetWorld()->GetGameState<AFarmingGameState>())
+	{
+		FarmingGameState->SetCurrentTime(CurrentDay, (int32)CurrentSeason, CurrentYear, CurrentTime);
+	}
+
 	// Broadcast time change
 	if (FMath::Abs(CurrentTime - PreviousTime) > 0.01f)
 	{
@@ -56,9 +70,20 @@ void AFarmingTimeManager::UpdateTime(float DeltaTime)
 
 void AFarmingTimeManager::SetTime(float NewTime)
 {
-	CurrentTime = FMath::Clamp(NewTime, 0.0f, 24.0f);
-	OnTimeChanged.Broadcast(CurrentTime);
+	if (!HasAuthority())
+	{
+		return;
+	}
 
+	CurrentTime = FMath::Clamp(NewTime, 0.0f, 24.0f);
+
+	// Sync to GameState
+	if (AFarmingGameState* FarmingGameState = GetWorld()->GetGameState<AFarmingGameState>())
+	{
+		FarmingGameState->SetCurrentTime(CurrentDay, (int32)CurrentSeason, CurrentYear, CurrentTime);
+	}
+
+	OnTimeChanged.Broadcast(CurrentTime);
 	UE_LOG(LogTemp, Log, TEXT("Time set to: %s"), *GetFormattedTime());
 }
 
@@ -71,6 +96,12 @@ void AFarmingTimeManager::AdvanceDay()
 	{
 		CurrentDay = 1;
 		AdvanceSeason();
+	}
+
+	// Sync to GameState
+	if (AFarmingGameState* FarmingGameState = GetWorld()->GetGameState<AFarmingGameState>())
+	{
+		FarmingGameState->SetCurrentTime(CurrentDay, (int32)CurrentSeason, CurrentYear, CurrentTime);
 	}
 
 	OnDayChanged.Broadcast(CurrentDay);
@@ -91,8 +122,14 @@ void AFarmingTimeManager::AdvanceSeason()
 	}
 
 	CurrentSeason = (ESeason)SeasonIndex;
-	OnSeasonChanged.Broadcast(CurrentSeason, CurrentYear);
 
+	// Sync to GameState
+	if (AFarmingGameState* FarmingGameState = GetWorld()->GetGameState<AFarmingGameState>())
+	{
+		FarmingGameState->SetCurrentTime(CurrentDay, (int32)CurrentSeason, CurrentYear, CurrentTime);
+	}
+
+	OnSeasonChanged.Broadcast(CurrentSeason, CurrentYear);
 	UE_LOG(LogTemp, Log, TEXT("Season changed to: %s (Year %d)"), *GetSeasonName(), CurrentYear);
 }
 
@@ -135,31 +172,43 @@ FString AFarmingTimeManager::GetFormattedDate() const
 
 void AFarmingTimeManager::SaveToWorldSave(UFarmingWorldSaveGame* WorldSave)
 {
-	if (WorldSave)
+	if (!WorldSave || !HasAuthority())
 	{
-		WorldSave->CurrentDay = CurrentDay;
-		WorldSave->CurrentSeason = (int32)CurrentSeason;
-		WorldSave->CurrentYear = CurrentYear;
-		WorldSave->CurrentTimeOfDay = CurrentTime;
-
-		UE_LOG(LogTemp, Log, TEXT("Saved time state: %s %s"), *GetFormattedDate(), *GetFormattedTime());
+		return;
 	}
+
+	// Save from local state (server only)
+	WorldSave->CurrentDay = CurrentDay;
+	WorldSave->CurrentSeason = (int32)CurrentSeason;
+	WorldSave->CurrentYear = CurrentYear;
+	WorldSave->CurrentTimeOfDay = CurrentTime;
+
+	UE_LOG(LogTemp, Log, TEXT("Saved time state: %s %s"), *GetFormattedDate(), *GetFormattedTime());
 }
 
 void AFarmingTimeManager::RestoreFromSave(UFarmingWorldSaveGame* WorldSave)
 {
-	if (WorldSave)
+	if (!WorldSave || !HasAuthority())
 	{
-		CurrentDay = WorldSave->CurrentDay;
-		CurrentSeason = (ESeason)WorldSave->CurrentSeason;
-		CurrentYear = WorldSave->CurrentYear;
-		CurrentTime = WorldSave->CurrentTimeOfDay;
-
-		UE_LOG(LogTemp, Log, TEXT("Restored time state: %s %s"), *GetFormattedDate(), *GetFormattedTime());
-
-		// Broadcast events to update UI
-		OnTimeChanged.Broadcast(CurrentTime);
-		OnDayChanged.Broadcast(CurrentDay);
-		OnSeasonChanged.Broadcast(CurrentSeason, CurrentYear);
+		return;
 	}
+
+	// Restore to local state (server only)
+	CurrentDay = WorldSave->CurrentDay;
+	CurrentSeason = (ESeason)WorldSave->CurrentSeason;
+	CurrentYear = WorldSave->CurrentYear;
+	CurrentTime = WorldSave->CurrentTimeOfDay;
+
+	// Sync to GameState (will replicate to clients)
+	if (AFarmingGameState* FarmingGameState = GetWorld()->GetGameState<AFarmingGameState>())
+	{
+		FarmingGameState->SetCurrentTime(CurrentDay, (int32)CurrentSeason, CurrentYear, CurrentTime);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("Restored time state: %s %s"), *GetFormattedDate(), *GetFormattedTime());
+
+	// Broadcast events to update UI
+	OnTimeChanged.Broadcast(CurrentTime);
+	OnDayChanged.Broadcast(CurrentDay);
+	OnSeasonChanged.Broadcast(CurrentSeason, CurrentYear);
 }
