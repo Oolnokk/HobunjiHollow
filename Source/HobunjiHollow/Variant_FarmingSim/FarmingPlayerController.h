@@ -100,4 +100,10 @@ protected:
 
 	/** Whether the character creation onboarding has been completed */
 	bool bCharacterCreationCompleted = false;
+
+	/** Load player preferences (last character name) */
+	void LoadPlayerPreferences();
+
+	/** Save player preferences (last character name) */
+	void SavePlayerPreferences();
 };

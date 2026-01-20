@@ -10,6 +10,7 @@
 #include "Kismet/KismetSystemLibrary.h"
 #include "Kismet/GameplayStatics.h"
 #include "FarmingCharacter.h"
+#include "Save/PlayerPreferencesSaveGame.h"
 
 AFarmingPlayerController::AFarmingPlayerController()
 {
@@ -31,6 +32,9 @@ void AFarmingPlayerController::BeginPlay()
 			Subsystem->AddMappingContext(DefaultMappingContext, 0);
 		}
 	}
+
+	// Load player preferences (remembers last character used)
+	LoadPlayerPreferences();
 
 	// Check if we need to show character creation onboarding
 	if (IsLocalController() && NeedsCharacterCreation())
@@ -231,6 +235,9 @@ void AFarmingPlayerController::OnCharacterCreationCompleted(const FString& Chara
 	CurrentCharacterName = CharacterName;
 	bCharacterCreationCompleted = true;
 
+	// Save player preferences so we remember this character
+	SavePlayerPreferences();
+
 	// Create the character on the controlled pawn
 	if (AFarmingCharacter* FarmingChar = Cast<AFarmingCharacter>(GetPawn()))
 	{
@@ -244,5 +251,46 @@ void AFarmingPlayerController::OnCharacterCreationCompleted(const FString& Chara
 	else
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Failed to create character - pawn is not a FarmingCharacter"));
+	}
+}
+
+void AFarmingPlayerController::LoadPlayerPreferences()
+{
+	// Load the preferences save file
+	if (USaveGame* LoadedGame = UGameplayStatics::LoadGameFromSlot(UPlayerPreferencesSaveGame::PreferencesSaveSlotName, 0))
+	{
+		if (UPlayerPreferencesSaveGame* Prefs = Cast<UPlayerPreferencesSaveGame>(LoadedGame))
+		{
+			CurrentCharacterName = Prefs->LastCharacterName;
+			UE_LOG(LogTemp, Log, TEXT("Loaded player preferences. Last character: %s"), *CurrentCharacterName);
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Log, TEXT("No player preferences found (first time playing)"));
+	}
+}
+
+void AFarmingPlayerController::SavePlayerPreferences()
+{
+	// Create or load the preferences save
+	UPlayerPreferencesSaveGame* Prefs = Cast<UPlayerPreferencesSaveGame>(
+		UGameplayStatics::CreateSaveGameObject(UPlayerPreferencesSaveGame::StaticClass())
+	);
+
+	if (Prefs)
+	{
+		Prefs->LastCharacterName = CurrentCharacterName;
+
+		bool bSuccess = UGameplayStatics::SaveGameToSlot(Prefs, UPlayerPreferencesSaveGame::PreferencesSaveSlotName, 0);
+
+		if (bSuccess)
+		{
+			UE_LOG(LogTemp, Log, TEXT("Saved player preferences. Last character: %s"), *CurrentCharacterName);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Failed to save player preferences"));
+		}
 	}
 }
