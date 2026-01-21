@@ -4,6 +4,7 @@
 #include "Save/SaveManager.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
+#include "../FarmingPlayerController.h"
 
 void UWorldSelectionWidgetBindable::NativePreConstruct()
 {
@@ -137,5 +138,34 @@ void UWorldSelectionWidgetBindable::OnCreateButtonClicked()
 	// World name is valid - notify player controller
 	UE_LOG(LogTemp, Log, TEXT("Creating new world: %s"), *WorldName);
 
-	// TODO: Call PlayerController->OnWorldSelected(WorldName, true);
+	// Get the player controller and notify it
+	if (APlayerController* PC = GetOwningPlayer())
+	{
+		if (AFarmingPlayerController* FarmingPC = Cast<AFarmingPlayerController>(PC))
+		{
+			// Remove this widget from viewport
+			RemoveFromParent();
+
+			// Notify the controller
+			FarmingPC->OnWorldSelected(WorldName, true);
+		}
+	}
+}
+
+void UWorldSelectionWidgetBindable::SelectExistingWorld(const FString& WorldName)
+{
+	UE_LOG(LogTemp, Log, TEXT("Selecting existing world: %s"), *WorldName);
+
+	// Get the player controller and notify it
+	if (APlayerController* PC = GetOwningPlayer())
+	{
+		if (AFarmingPlayerController* FarmingPC = Cast<AFarmingPlayerController>(PC))
+		{
+			// Remove this widget from viewport
+			RemoveFromParent();
+
+			// Notify the controller (not a new world)
+			FarmingPC->OnWorldSelected(WorldName, false);
+		}
+	}
 }

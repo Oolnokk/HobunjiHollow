@@ -75,6 +75,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Display")
 	TSubclassOf<UUserWidget> WorldEntryWidgetClass;
 
+	/** Called when an existing world is selected - implement in Blueprint or C++ */
+	UFUNCTION(BlueprintCallable, Category = "World Selection")
+	void SelectExistingWorld(const FString& WorldName);
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativePreConstruct() override;
