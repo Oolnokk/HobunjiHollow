@@ -20,6 +20,10 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = "Player")
 	FString LastCharacterName;
 
+	/** Name of the last world that was loaded or created */
+	UPROPERTY(VisibleAnywhere, Category = "Player")
+	FString LastWorldName;
+
 	/** Save slot name for player preferences */
 	static const FString PreferencesSaveSlotName;
 };

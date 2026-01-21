@@ -33,13 +33,13 @@ void AFarmingPlayerController::BeginPlay()
 		}
 	}
 
-	// Load player preferences (remembers last character used)
+	// Load player preferences (remembers last character and world used)
 	LoadPlayerPreferences();
 
-	// Check if we need to show character creation onboarding
-	if (IsLocalController() && NeedsCharacterCreation())
+	// Show world selection on game start (manual flow)
+	if (IsLocalController())
 	{
-		ShowCharacterCreator();
+		ShowWorldSelection();
 	}
 }
 
@@ -197,33 +197,48 @@ void AFarmingPlayerController::UpdateInteractableFocus()
 	}
 }
 
-bool AFarmingPlayerController::NeedsCharacterCreation() const
+void AFarmingPlayerController::ShowWorldSelection_Implementation()
 {
-	// If we've already completed character creation this session, don't show it again
-	if (bCharacterCreationCompleted)
-	{
-		return false;
-	}
+	// Override in Blueprint to show world selection UI
+	UE_LOG(LogTemp, Log, TEXT("ShowWorldSelection called - implement in Blueprint to show UI"));
+}
 
-	// Check if we have a character name stored (could be from previous session)
-	if (!CurrentCharacterName.IsEmpty())
-	{
-		// Verify the save file exists
-		FString SlotName = FString::Printf(TEXT("Character_%s"), *CurrentCharacterName);
-		if (UGameplayStatics::DoesSaveGameExist(SlotName, 0))
-		{
-			return false;
-		}
-	}
-
-	// No character exists, need to create one
-	return true;
+void AFarmingPlayerController::ShowCharacterSelection_Implementation()
+{
+	// Override in Blueprint to show character selection UI
+	UE_LOG(LogTemp, Log, TEXT("ShowCharacterSelection called - implement in Blueprint to show UI"));
 }
 
 void AFarmingPlayerController::ShowCharacterCreator_Implementation()
 {
-	// Default implementation - override in Blueprint to show UI
+	// Override in Blueprint to show character creator UI
 	UE_LOG(LogTemp, Log, TEXT("ShowCharacterCreator called - implement in Blueprint to show UI"));
+}
+
+void AFarmingPlayerController::OnWorldSelected(const FString& WorldName, bool bIsNewWorld)
+{
+	UE_LOG(LogTemp, Log, TEXT("World selected: %s (New: %d)"), *WorldName, bIsNewWorld);
+
+	CurrentWorldName = WorldName;
+	bWorldSelected = true;
+	this->bIsNewWorld = bIsNewWorld;
+
+	// Show character selection next
+	ShowCharacterSelection();
+}
+
+void AFarmingPlayerController::OnCharacterSelected(const FString& CharacterName)
+{
+	UE_LOG(LogTemp, Log, TEXT("Character selected: %s"), *CharacterName);
+
+	CurrentCharacterName = CharacterName;
+	bCharacterSelected = true;
+
+	// Save preferences
+	SavePlayerPreferences();
+
+	// Load the game with both saves
+	LoadGameWithSaves();
 }
 
 void AFarmingPlayerController::OnCharacterCreationCompleted(const FString& CharacterName, FName SpeciesID, ECharacterGender Gender)
@@ -233,10 +248,7 @@ void AFarmingPlayerController::OnCharacterCreationCompleted(const FString& Chara
 
 	// Store the character name
 	CurrentCharacterName = CharacterName;
-	bCharacterCreationCompleted = true;
-
-	// Save player preferences so we remember this character
-	SavePlayerPreferences();
+	bCharacterSelected = true;
 
 	// Create the character on the controlled pawn
 	if (AFarmingCharacter* FarmingChar = Cast<AFarmingCharacter>(GetPawn()))
@@ -252,6 +264,40 @@ void AFarmingPlayerController::OnCharacterCreationCompleted(const FString& Chara
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Failed to create character - pawn is not a FarmingCharacter"));
 	}
+
+	// Save preferences
+	SavePlayerPreferences();
+
+	// Load the game with both saves
+	LoadGameWithSaves();
+}
+
+void AFarmingPlayerController::LoadGameWithSaves()
+{
+	if (!bWorldSelected || !bCharacterSelected)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Cannot load game - World selected: %d, Character selected: %d"),
+			bWorldSelected, bCharacterSelected);
+		return;
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("Loading game with World: %s, Character: %s"),
+		*CurrentWorldName, *CurrentCharacterName);
+
+	// Load the character
+	if (AFarmingCharacter* FarmingChar = Cast<AFarmingCharacter>(GetPawn()))
+	{
+		if (!bIsNewWorld)
+		{
+			// Load existing character
+			FarmingChar->LoadCharacter(CurrentCharacterName);
+		}
+		// If new world, character is already created from OnCharacterCreationCompleted or will be loaded fresh
+	}
+
+	// Transition to gameplay
+	// TODO: Handle world loading (this will be done by GameMode)
+	UE_LOG(LogTemp, Log, TEXT("Save selection complete - ready to start game"));
 }
 
 void AFarmingPlayerController::LoadPlayerPreferences()
@@ -262,7 +308,9 @@ void AFarmingPlayerController::LoadPlayerPreferences()
 		if (UPlayerPreferencesSaveGame* Prefs = Cast<UPlayerPreferencesSaveGame>(LoadedGame))
 		{
 			CurrentCharacterName = Prefs->LastCharacterName;
-			UE_LOG(LogTemp, Log, TEXT("Loaded player preferences. Last character: %s"), *CurrentCharacterName);
+			CurrentWorldName = Prefs->LastWorldName;
+			UE_LOG(LogTemp, Log, TEXT("Loaded player preferences. Last character: %s, Last world: %s"),
+				*CurrentCharacterName, *CurrentWorldName);
 		}
 	}
 	else
@@ -281,12 +329,14 @@ void AFarmingPlayerController::SavePlayerPreferences()
 	if (Prefs)
 	{
 		Prefs->LastCharacterName = CurrentCharacterName;
+		Prefs->LastWorldName = CurrentWorldName;
 
 		bool bSuccess = UGameplayStatics::SaveGameToSlot(Prefs, UPlayerPreferencesSaveGame::PreferencesSaveSlotName, 0);
 
 		if (bSuccess)
 		{
-			UE_LOG(LogTemp, Log, TEXT("Saved player preferences. Last character: %s"), *CurrentCharacterName);
+			UE_LOG(LogTemp, Log, TEXT("Saved player preferences. Last character: %s, Last world: %s"),
+				*CurrentCharacterName, *CurrentWorldName);
 		}
 		else
 		{
