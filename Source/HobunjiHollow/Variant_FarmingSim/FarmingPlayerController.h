@@ -73,7 +73,7 @@ public:
 
 	/** Called when a world is selected (existing or new) */
 	UFUNCTION(BlueprintCallable, Category = "Save Selection")
-	void OnWorldSelected(const FString& WorldName, bool bIsNewWorld);
+	void OnWorldSelected(const FString& WorldName, bool bIsNew);
 
 	/** Called when a character is selected */
 	UFUNCTION(BlueprintCallable, Category = "Save Selection")

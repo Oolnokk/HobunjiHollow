@@ -215,13 +215,13 @@ void AFarmingPlayerController::ShowCharacterCreator_Implementation()
 	UE_LOG(LogTemp, Log, TEXT("ShowCharacterCreator called - implement in Blueprint to show UI"));
 }
 
-void AFarmingPlayerController::OnWorldSelected(const FString& WorldName, bool bIsNewWorld)
+void AFarmingPlayerController::OnWorldSelected(const FString& WorldName, bool bIsNew)
 {
-	UE_LOG(LogTemp, Log, TEXT("World selected: %s (New: %d)"), *WorldName, bIsNewWorld);
+	UE_LOG(LogTemp, Log, TEXT("World selected: %s (New: %d)"), *WorldName, bIsNew);
 
 	CurrentWorldName = WorldName;
 	bWorldSelected = true;
-	this->bIsNewWorld = bIsNewWorld;
+	bIsNewWorld = bIsNew;
 
 	// Show character selection next
 	ShowCharacterSelection();

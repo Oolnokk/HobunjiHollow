@@ -100,7 +100,7 @@ bool USaveManager::GetWorldSaveInfo(const FString& WorldName, FWorldSaveInfo& Ou
 			OutInfo.WorldName = WorldName;
 			OutInfo.OwnerCharacterName = WorldSave->CurrentCharacterName;
 			OutInfo.Money = WorldSave->Money;
-			OutInfo.TotalPlayTime = WorldSave->TotalPlayTime;
+			OutInfo.TotalPlayTime = WorldSave->PlayTime;
 
 			// Format date string
 			OutInfo.CurrentDate = FormatGameDate(WorldSave->CurrentDay, WorldSave->CurrentSeason, WorldSave->CurrentYear);
