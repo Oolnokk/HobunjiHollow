@@ -224,30 +224,49 @@ void AFarmingPlayerController::OnWorldSelected(const FString& WorldName, bool bI
 	bWorldSelected = true;
 	bIsNewWorld = bIsNew;
 
-	// Create or load the world through GameMode
-	if (AFarmingGameMode* GameMode = GetWorld()->GetAuthGameMode<AFarmingGameMode>())
+	// Create or load the world on the server
+	if (bIsNew)
 	{
-		if (bIsNew)
-		{
-			// Create new world
-			GameMode->CreateNewWorld(WorldName);
-		}
-		else
-		{
-			// Load existing world
-			if (!GameMode->LoadWorld(WorldName))
-			{
-				UE_LOG(LogTemp, Error, TEXT("Failed to load world: %s"), *WorldName);
-			}
-		}
+		ServerCreateWorld(WorldName);
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Could not get GameMode to create/load world"));
+		ServerLoadWorld(WorldName);
 	}
 
 	// Show character selection next
 	ShowCharacterSelection();
+}
+
+void AFarmingPlayerController::ServerCreateWorld_Implementation(const FString& WorldName)
+{
+	UE_LOG(LogTemp, Log, TEXT("Server: Creating world: %s"), *WorldName);
+
+	if (AFarmingGameMode* GameMode = GetWorld()->GetAuthGameMode<AFarmingGameMode>())
+	{
+		GameMode->CreateNewWorld(WorldName);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("Server: Failed to get GameMode for world creation"));
+	}
+}
+
+void AFarmingPlayerController::ServerLoadWorld_Implementation(const FString& WorldName)
+{
+	UE_LOG(LogTemp, Log, TEXT("Server: Loading world: %s"), *WorldName);
+
+	if (AFarmingGameMode* GameMode = GetWorld()->GetAuthGameMode<AFarmingGameMode>())
+	{
+		if (!GameMode->LoadWorld(WorldName))
+		{
+			UE_LOG(LogTemp, Error, TEXT("Server: Failed to load world: %s"), *WorldName);
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("Server: Failed to get GameMode for world loading"));
+	}
 }
 
 void AFarmingPlayerController::OnCharacterSelected(const FString& CharacterName)

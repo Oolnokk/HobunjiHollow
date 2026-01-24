@@ -95,6 +95,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Save Selection")
 	FString GetCurrentWorldName() const { return CurrentWorldName; }
 
+	/** Server RPC to create world on server */
+	UFUNCTION(Server, Reliable)
+	void ServerCreateWorld(const FString& WorldName);
+
+	/** Server RPC to load world on server */
+	UFUNCTION(Server, Reliable)
+	void ServerLoadWorld(const FString& WorldName);
+
 protected:
 	/** Handle movement input */
 	void OnMove(const FInputActionValue& Value);
