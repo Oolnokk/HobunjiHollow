@@ -2,6 +2,8 @@
 
 #include "CharacterCreatorWidget.h"
 #include "Data/SpeciesDatabase.h"
+#include "FarmingPlayerController.h"
+#include "Kismet/GameplayStatics.h"
 
 void UCharacterCreatorWidget::NativeConstruct()
 {
@@ -65,11 +67,20 @@ void UCharacterCreatorWidget::CreateCharacter()
 	UE_LOG(LogTemp, Log, TEXT("Creating character: %s (Species: %s, Gender: %d)"),
 		*CharacterName, *SelectedSpecies.ToString(), (int32)SelectedGender);
 
-	// Notify Blueprint
+	// Notify the PlayerController to create the character
+	if (APlayerController* PC = GetOwningPlayer())
+	{
+		if (AFarmingPlayerController* FarmingPC = Cast<AFarmingPlayerController>(PC))
+		{
+			FarmingPC->OnCharacterCreationCompleted(CharacterName, SelectedSpecies, SelectedGender);
+		}
+	}
+
+	// Notify Blueprint for UI cleanup and next steps
 	OnCharacterCreated(CharacterName, SelectedSpecies, SelectedGender);
 }
 
 void UCharacterCreatorWidget::OnCharacterCreated_Implementation(const FString& Name, FName Species, ECharacterGender Gender)
 {
-	// Override in Blueprint to handle character creation and world selection
+	// Override in Blueprint to handle UI cleanup and world selection
 }

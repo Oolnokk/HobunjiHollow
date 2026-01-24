@@ -10,6 +10,7 @@ class UInputMappingContext;
 class UInputAction;
 struct FInputActionValue;
 class IInteractable;
+enum class ECharacterGender : uint8;
 
 /**
  * Player controller for the farming simulation
@@ -57,6 +58,51 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Interaction")
 	AActor* GetFocusedInteractable() const { return CurrentInteractable; }
 
+	// Save Selection Flow
+	/** Show world selection UI - implement in Blueprint */
+	UFUNCTION(BlueprintNativeEvent, Category = "Save Selection")
+	void ShowWorldSelection();
+
+	/** Show character selection UI - implement in Blueprint */
+	UFUNCTION(BlueprintNativeEvent, Category = "Save Selection")
+	void ShowCharacterSelection();
+
+	/** Show the character creator UI - implement in Blueprint */
+	UFUNCTION(BlueprintNativeEvent, Category = "Save Selection")
+	void ShowCharacterCreator();
+
+	/** Called when a world is selected (existing or new) */
+	UFUNCTION(BlueprintCallable, Category = "Save Selection")
+	void OnWorldSelected(const FString& WorldName, bool bIsNew);
+
+	/** Called when a character is selected */
+	UFUNCTION(BlueprintCallable, Category = "Save Selection")
+	void OnCharacterSelected(const FString& CharacterName);
+
+	/** Called when character creation is completed */
+	UFUNCTION(BlueprintCallable, Category = "Save Selection")
+	void OnCharacterCreationCompleted(const FString& CharacterName, FName SpeciesID, ECharacterGender Gender);
+
+	/** Load the selected world and character into the game */
+	UFUNCTION(BlueprintCallable, Category = "Save Selection")
+	void LoadGameWithSaves();
+
+	/** Get the name of the current character (if loaded) */
+	UFUNCTION(BlueprintPure, Category = "Save Selection")
+	FString GetCurrentCharacterName() const { return CurrentCharacterName; }
+
+	/** Get the name of the current world (if loaded) */
+	UFUNCTION(BlueprintPure, Category = "Save Selection")
+	FString GetCurrentWorldName() const { return CurrentWorldName; }
+
+	/** Server RPC to create world on server */
+	UFUNCTION(Server, Reliable)
+	void ServerCreateWorld(const FString& WorldName);
+
+	/** Server RPC to load world on server */
+	UFUNCTION(Server, Reliable)
+	void ServerLoadWorld(const FString& WorldName);
+
 protected:
 	/** Handle movement input */
 	void OnMove(const FInputActionValue& Value);
@@ -76,4 +122,25 @@ protected:
 	/** Currently focused interactable actor */
 	UPROPERTY(BlueprintReadOnly, Category = "Interaction")
 	AActor* CurrentInteractable;
+
+	/** Name of the current character */
+	FString CurrentCharacterName;
+
+	/** Name of the current world */
+	FString CurrentWorldName;
+
+	/** Whether a world has been selected */
+	bool bWorldSelected = false;
+
+	/** Whether a character has been selected or created */
+	bool bCharacterSelected = false;
+
+	/** Whether we're creating a new world */
+	bool bIsNewWorld = false;
+
+	/** Load player preferences (last character name) */
+	void LoadPlayerPreferences();
+
+	/** Save player preferences (last character and world name) */
+	void SavePlayerPreferences();
 };

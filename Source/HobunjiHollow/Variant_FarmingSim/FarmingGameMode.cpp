@@ -44,13 +44,26 @@ void AFarmingGameMode::CreateNewWorld(const FString& WorldName)
 		CurrentWorldSave->WorldName = WorldName;
 		CurrentWorldSave->InitializeNewWorld();
 
-		UE_LOG(LogTemp, Log, TEXT("Created new world: %s"), *WorldName);
+		// Save to disk immediately with correct format
+		FString SlotName = FString::Printf(TEXT("World_%s"), *WorldName);
+		bool bSaved = UGameplayStatics::SaveGameToSlot(CurrentWorldSave, SlotName, 0);
+
+		if (bSaved)
+		{
+			UE_LOG(LogTemp, Log, TEXT("Created and saved new world: %s"), *WorldName);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("Created world %s but failed to save to disk"), *WorldName);
+		}
 	}
 }
 
 bool AFarmingGameMode::LoadWorld(const FString& WorldName)
 {
-	USaveGame* LoadedGame = UGameplayStatics::LoadGameFromSlot(WorldName, 0);
+	// Load with "World_" prefix to match SaveManager format
+	FString SlotName = FString::Printf(TEXT("World_%s"), *WorldName);
+	USaveGame* LoadedGame = UGameplayStatics::LoadGameFromSlot(SlotName, 0);
 	if (LoadedGame)
 	{
 		CurrentWorldSave = Cast<UFarmingWorldSaveGame>(LoadedGame);
@@ -110,8 +123,9 @@ bool AFarmingGameMode::SaveWorld()
 		}
 	}
 
-	// Save to disk
-	bool bSuccess = UGameplayStatics::SaveGameToSlot(CurrentWorldSave, CurrentWorldSave->WorldName, 0);
+	// Save to disk with "World_" prefix to match SaveManager format
+	FString SlotName = FString::Printf(TEXT("World_%s"), *CurrentWorldSave->WorldName);
+	bool bSuccess = UGameplayStatics::SaveGameToSlot(CurrentWorldSave, SlotName, 0);
 
 	if (bSuccess)
 	{

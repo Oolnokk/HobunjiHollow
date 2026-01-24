@@ -8,6 +8,10 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Interaction/Interactable.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "Kismet/GameplayStatics.h"
+#include "FarmingCharacter.h"
+#include "FarmingGameMode.h"
+#include "Save/PlayerPreferencesSaveGame.h"
 
 AFarmingPlayerController::AFarmingPlayerController()
 {
@@ -28,6 +32,15 @@ void AFarmingPlayerController::BeginPlay()
 		{
 			Subsystem->AddMappingContext(DefaultMappingContext, 0);
 		}
+	}
+
+	// Load player preferences (remembers last character and world used)
+	LoadPlayerPreferences();
+
+	// Show world selection on game start (manual flow)
+	if (IsLocalController())
+	{
+		ShowWorldSelection();
 	}
 }
 
@@ -181,6 +194,193 @@ void AFarmingPlayerController::UpdateInteractableFocus()
 		if (CurrentInteractable && CurrentInteractable->Implements<UInteractable>())
 		{
 			IInteractable::Execute_OnFocusGained(CurrentInteractable);
+		}
+	}
+}
+
+void AFarmingPlayerController::ShowWorldSelection_Implementation()
+{
+	// Override in Blueprint to show world selection UI
+	UE_LOG(LogTemp, Log, TEXT("ShowWorldSelection called - implement in Blueprint to show UI"));
+}
+
+void AFarmingPlayerController::ShowCharacterSelection_Implementation()
+{
+	// Override in Blueprint to show character selection UI
+	UE_LOG(LogTemp, Log, TEXT("ShowCharacterSelection called - implement in Blueprint to show UI"));
+}
+
+void AFarmingPlayerController::ShowCharacterCreator_Implementation()
+{
+	// Override in Blueprint to show character creator UI
+	UE_LOG(LogTemp, Log, TEXT("ShowCharacterCreator called - implement in Blueprint to show UI"));
+}
+
+void AFarmingPlayerController::OnWorldSelected(const FString& WorldName, bool bIsNew)
+{
+	UE_LOG(LogTemp, Log, TEXT("World selected: %s (New: %d)"), *WorldName, bIsNew);
+
+	CurrentWorldName = WorldName;
+	bWorldSelected = true;
+	bIsNewWorld = bIsNew;
+
+	// Create or load the world on the server
+	if (bIsNew)
+	{
+		ServerCreateWorld(WorldName);
+	}
+	else
+	{
+		ServerLoadWorld(WorldName);
+	}
+
+	// Show character selection next
+	ShowCharacterSelection();
+}
+
+void AFarmingPlayerController::ServerCreateWorld_Implementation(const FString& WorldName)
+{
+	UE_LOG(LogTemp, Log, TEXT("Server: Creating world: %s"), *WorldName);
+
+	if (AFarmingGameMode* GameMode = GetWorld()->GetAuthGameMode<AFarmingGameMode>())
+	{
+		GameMode->CreateNewWorld(WorldName);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("Server: Failed to get GameMode for world creation"));
+	}
+}
+
+void AFarmingPlayerController::ServerLoadWorld_Implementation(const FString& WorldName)
+{
+	UE_LOG(LogTemp, Log, TEXT("Server: Loading world: %s"), *WorldName);
+
+	if (AFarmingGameMode* GameMode = GetWorld()->GetAuthGameMode<AFarmingGameMode>())
+	{
+		if (!GameMode->LoadWorld(WorldName))
+		{
+			UE_LOG(LogTemp, Error, TEXT("Server: Failed to load world: %s"), *WorldName);
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("Server: Failed to get GameMode for world loading"));
+	}
+}
+
+void AFarmingPlayerController::OnCharacterSelected(const FString& CharacterName)
+{
+	UE_LOG(LogTemp, Log, TEXT("Character selected: %s"), *CharacterName);
+
+	CurrentCharacterName = CharacterName;
+	bCharacterSelected = true;
+
+	// Save preferences
+	SavePlayerPreferences();
+
+	// Load the game with both saves
+	LoadGameWithSaves();
+}
+
+void AFarmingPlayerController::OnCharacterCreationCompleted(const FString& CharacterName, FName SpeciesID, ECharacterGender Gender)
+{
+	UE_LOG(LogTemp, Log, TEXT("Character creation completed: %s (Species: %s, Gender: %d)"),
+		*CharacterName, *SpeciesID.ToString(), (int32)Gender);
+
+	// Store the character name
+	CurrentCharacterName = CharacterName;
+	bCharacterSelected = true;
+
+	// Create the character on the controlled pawn
+	if (AFarmingCharacter* FarmingChar = Cast<AFarmingCharacter>(GetPawn()))
+	{
+		FarmingChar->CreateNewCharacter(CharacterName, SpeciesID, Gender);
+
+		// Save the character to disk
+		FarmingChar->SaveCharacter();
+
+		UE_LOG(LogTemp, Log, TEXT("Character created and saved successfully"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Failed to create character - pawn is not a FarmingCharacter"));
+	}
+
+	// Save preferences
+	SavePlayerPreferences();
+
+	// Load the game with both saves
+	LoadGameWithSaves();
+}
+
+void AFarmingPlayerController::LoadGameWithSaves()
+{
+	if (!bWorldSelected || !bCharacterSelected)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Cannot load game - World selected: %d, Character selected: %d"),
+			bWorldSelected, bCharacterSelected);
+		return;
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("Loading game with World: %s, Character: %s"),
+		*CurrentWorldName, *CurrentCharacterName);
+
+	// Load the character
+	if (AFarmingCharacter* FarmingChar = Cast<AFarmingCharacter>(GetPawn()))
+	{
+		// Load the character (works for both new and existing characters)
+		// New characters were already created in OnCharacterCreationCompleted
+		// Existing characters will be loaded from disk
+		FarmingChar->LoadCharacter(CurrentCharacterName);
+	}
+
+	// Transition to gameplay
+	// World has already been created/loaded in OnWorldSelected
+	UE_LOG(LogTemp, Log, TEXT("Save selection complete - ready to start game"));
+}
+
+void AFarmingPlayerController::LoadPlayerPreferences()
+{
+	// Load the preferences save file
+	if (USaveGame* LoadedGame = UGameplayStatics::LoadGameFromSlot(UPlayerPreferencesSaveGame::PreferencesSaveSlotName, 0))
+	{
+		if (UPlayerPreferencesSaveGame* Prefs = Cast<UPlayerPreferencesSaveGame>(LoadedGame))
+		{
+			CurrentCharacterName = Prefs->LastCharacterName;
+			CurrentWorldName = Prefs->LastWorldName;
+			UE_LOG(LogTemp, Log, TEXT("Loaded player preferences. Last character: %s, Last world: %s"),
+				*CurrentCharacterName, *CurrentWorldName);
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Log, TEXT("No player preferences found (first time playing)"));
+	}
+}
+
+void AFarmingPlayerController::SavePlayerPreferences()
+{
+	// Create or load the preferences save
+	UPlayerPreferencesSaveGame* Prefs = Cast<UPlayerPreferencesSaveGame>(
+		UGameplayStatics::CreateSaveGameObject(UPlayerPreferencesSaveGame::StaticClass())
+	);
+
+	if (Prefs)
+	{
+		Prefs->LastCharacterName = CurrentCharacterName;
+		Prefs->LastWorldName = CurrentWorldName;
+
+		bool bSuccess = UGameplayStatics::SaveGameToSlot(Prefs, UPlayerPreferencesSaveGame::PreferencesSaveSlotName, 0);
+
+		if (bSuccess)
+		{
+			UE_LOG(LogTemp, Log, TEXT("Saved player preferences. Last character: %s, Last world: %s"),
+				*CurrentCharacterName, *CurrentWorldName);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Failed to save player preferences"));
 		}
 	}
 }
