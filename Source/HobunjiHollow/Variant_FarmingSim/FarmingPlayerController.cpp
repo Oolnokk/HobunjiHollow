@@ -10,6 +10,7 @@
 #include "Kismet/KismetSystemLibrary.h"
 #include "Kismet/GameplayStatics.h"
 #include "FarmingCharacter.h"
+#include "FarmingGameMode.h"
 #include "Save/PlayerPreferencesSaveGame.h"
 
 AFarmingPlayerController::AFarmingPlayerController()
@@ -223,6 +224,28 @@ void AFarmingPlayerController::OnWorldSelected(const FString& WorldName, bool bI
 	bWorldSelected = true;
 	bIsNewWorld = bIsNew;
 
+	// Create or load the world through GameMode
+	if (AFarmingGameMode* GameMode = GetWorld()->GetAuthGameMode<AFarmingGameMode>())
+	{
+		if (bIsNew)
+		{
+			// Create new world
+			GameMode->CreateNewWorld(WorldName);
+		}
+		else
+		{
+			// Load existing world
+			if (!GameMode->LoadWorld(WorldName))
+			{
+				UE_LOG(LogTemp, Error, TEXT("Failed to load world: %s"), *WorldName);
+			}
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Could not get GameMode to create/load world"));
+	}
+
 	// Show character selection next
 	ShowCharacterSelection();
 }
@@ -287,16 +310,14 @@ void AFarmingPlayerController::LoadGameWithSaves()
 	// Load the character
 	if (AFarmingCharacter* FarmingChar = Cast<AFarmingCharacter>(GetPawn()))
 	{
-		if (!bIsNewWorld)
-		{
-			// Load existing character
-			FarmingChar->LoadCharacter(CurrentCharacterName);
-		}
-		// If new world, character is already created from OnCharacterCreationCompleted or will be loaded fresh
+		// Load the character (works for both new and existing characters)
+		// New characters were already created in OnCharacterCreationCompleted
+		// Existing characters will be loaded from disk
+		FarmingChar->LoadCharacter(CurrentCharacterName);
 	}
 
 	// Transition to gameplay
-	// TODO: Handle world loading (this will be done by GameMode)
+	// World has already been created/loaded in OnWorldSelected
 	UE_LOG(LogTemp, Log, TEXT("Save selection complete - ready to start game"));
 }
 
