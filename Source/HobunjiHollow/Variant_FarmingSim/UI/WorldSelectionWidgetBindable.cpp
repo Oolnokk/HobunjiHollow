@@ -18,6 +18,14 @@ void UWorldSelectionWidgetBindable::NativeConstruct()
 {
 	Super::NativeConstruct();
 
+	// Debug: Check which widgets are bound
+	UE_LOG(LogTemp, Log, TEXT("WorldSelectionWidgetBindable::NativeConstruct called"));
+	UE_LOG(LogTemp, Log, TEXT("  TitleText: %s"), TitleText ? TEXT("BOUND") : TEXT("NULL"));
+	UE_LOG(LogTemp, Log, TEXT("  WorldListContainer: %s"), WorldListContainer ? TEXT("BOUND") : TEXT("NULL"));
+	UE_LOG(LogTemp, Log, TEXT("  NewWorldNameInput: %s"), NewWorldNameInput ? TEXT("BOUND") : TEXT("NULL"));
+	UE_LOG(LogTemp, Log, TEXT("  CreateWorldButton: %s"), CreateWorldButton ? TEXT("BOUND") : TEXT("NULL"));
+	UE_LOG(LogTemp, Log, TEXT("  ErrorText: %s"), ErrorText ? TEXT("BOUND") : TEXT("NULL (optional)"));
+
 	// Apply customizations at runtime
 	ApplyCustomization();
 
@@ -25,6 +33,11 @@ void UWorldSelectionWidgetBindable::NativeConstruct()
 	if (CreateWorldButton)
 	{
 		CreateWorldButton->OnClicked.AddDynamic(this, &UWorldSelectionWidgetBindable::OnCreateButtonClicked);
+		UE_LOG(LogTemp, Log, TEXT("  CreateWorldButton OnClicked event bound successfully"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("  CreateWorldButton is NULL - cannot bind click event!"));
 	}
 
 	// Populate the world list
@@ -107,12 +120,16 @@ void UWorldSelectionWidgetBindable::PopulateWorldList()
 
 void UWorldSelectionWidgetBindable::OnCreateButtonClicked()
 {
+	UE_LOG(LogTemp, Warning, TEXT("CreateWorldButton clicked!"));
+
 	if (!NewWorldNameInput)
 	{
+		UE_LOG(LogTemp, Error, TEXT("NewWorldNameInput is NULL!"));
 		return;
 	}
 
 	FString WorldName = NewWorldNameInput->GetText().ToString();
+	UE_LOG(LogTemp, Log, TEXT("Entered world name: '%s' (Length: %d)"), *WorldName, WorldName.Len());
 
 	// Validate world name
 	if (WorldName.Len() < 2 || WorldName.Len() > 30)
