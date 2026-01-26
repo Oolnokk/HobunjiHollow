@@ -13,40 +13,69 @@ class AFarmingTimeManager;
 class AAIController;
 
 /**
- * Schedule entry combining JSON data with runtime state
+ * A single waypoint in a patrol route
  */
 USTRUCT(BlueprintType)
-struct FNPCSchedulePoint
+struct FPatrolWaypoint
 {
 	GENERATED_BODY()
 
-	/** Location name identifier */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule")
-	FString LocationName;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Patrol")
+	FString Name;
 
-	/** Grid coordinate of this location */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Patrol")
 	FGridCoordinate GridPosition;
 
-	/** World position (calculated from grid) */
-	UPROPERTY(BlueprintReadOnly, Category = "Schedule")
+	UPROPERTY(BlueprintReadOnly, Category = "Patrol")
 	FVector WorldPosition;
 
-	/** Direction to face when arrived */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Patrol")
 	EGridDirection Facing = EGridDirection::South;
 
-	/** Activities available at this location */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule")
-	TArray<FString> Activities;
-
-	/** How close NPC needs to be to "arrive" */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Patrol")
 	float ArrivalTolerance = 50.0f;
 
-	/** Time of day to be at this location (0-24) */
+	/** Optional wait time at this point (seconds, 0 = no wait) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Patrol")
+	float WaitTime = 0.0f;
+};
+
+/**
+ * A named patrol route that NPCs can follow
+ */
+USTRUCT(BlueprintType)
+struct FPatrolRoute
+{
+	GENERATED_BODY()
+
+	/** Unique identifier for this route */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Patrol")
+	FString RouteId;
+
+	/** Waypoints in order */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Patrol")
+	TArray<FPatrolWaypoint> Waypoints;
+
+	/** Whether to loop back to start after reaching end */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Patrol")
+	bool bLooping = true;
+};
+
+/**
+ * Schedule entry - either a single location or a patrol route
+ */
+USTRUCT(BlueprintType)
+struct FNPCScheduleEntry
+{
+	GENERATED_BODY()
+
+	/** Start time for this activity (0-24) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule")
-	float TimeOfDay = 8.0f;
+	float StartTime = 0.0f;
+
+	/** End time for this activity (0-24, can wrap past midnight) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule")
+	float EndTime = 24.0f;
 
 	/** Day of week (-1 = any, 0-6 = Mon-Sun) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule")
@@ -55,11 +84,33 @@ struct FNPCSchedulePoint
 	/** Season (-1 = any, 0-3 = Spring-Winter) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule")
 	int32 Season = -1;
+
+	/** If true, follow a patrol route. If false, go to a single location */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule")
+	bool bIsPatrol = false;
+
+	/** Patrol route ID (when bIsPatrol = true) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule", meta = (EditCondition = "bIsPatrol"))
+	FString PatrolRouteId;
+
+	/** Single destination (when bIsPatrol = false) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule", meta = (EditCondition = "!bIsPatrol"))
+	FString LocationName;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule", meta = (EditCondition = "!bIsPatrol"))
+	FGridCoordinate Location;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule", meta = (EditCondition = "!bIsPatrol"))
+	EGridDirection Facing = EGridDirection::South;
+
+	/** Activity name for animation/behavior */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule")
+	FString Activity;
 };
 
 /**
  * Component that manages NPC scheduling and movement based on JSON-defined locations.
- * Add to your NPC actors to enable grid-based pathfinding.
+ * Supports both single destinations and patrol routes.
  */
 UCLASS(ClassGroup=(NPC), meta=(BlueprintSpawnableComponent))
 class HOBUNJIHOLLOW_API UNPCScheduleComponent : public UActorComponent
@@ -93,33 +144,59 @@ public:
 
 	// ---- Schedule Data ----
 
-	/** All schedule points for this NPC */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Schedule")
-	TArray<FNPCSchedulePoint> SchedulePoints;
+	/** Available patrol routes */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Schedule|Routes")
+	TArray<FPatrolRoute> PatrolRoutes;
 
-	/** Current target schedule point index */
-	UPROPERTY(BlueprintReadOnly, Category = "NPC Schedule")
-	int32 CurrentTargetIndex = -1;
+	/** Schedule entries (time-based activities) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Schedule|Schedule")
+	TArray<FNPCScheduleEntry> Schedule;
 
-	/** Whether NPC is currently moving to a location */
-	UPROPERTY(BlueprintReadOnly, Category = "NPC Schedule")
+	// ---- Runtime State ----
+
+	/** Index of current schedule entry */
+	UPROPERTY(BlueprintReadOnly, Category = "NPC Schedule|State")
+	int32 CurrentScheduleIndex = -1;
+
+	/** If patrolling, current waypoint index in the route */
+	UPROPERTY(BlueprintReadOnly, Category = "NPC Schedule|State")
+	int32 CurrentPatrolWaypointIndex = -1;
+
+	/** Whether NPC is currently patrolling */
+	UPROPERTY(BlueprintReadOnly, Category = "NPC Schedule|State")
+	bool bIsPatrolling = false;
+
+	/** Whether NPC is currently moving */
+	UPROPERTY(BlueprintReadOnly, Category = "NPC Schedule|State")
 	bool bIsMoving = false;
 
 	/** Whether NPC has arrived at current target */
-	UPROPERTY(BlueprintReadOnly, Category = "NPC Schedule")
+	UPROPERTY(BlueprintReadOnly, Category = "NPC Schedule|State")
 	bool bHasArrived = false;
+
+	/** Current activity name */
+	UPROPERTY(BlueprintReadOnly, Category = "NPC Schedule|State")
+	FString CurrentActivity;
+
+	/** Time spent waiting at current waypoint */
+	UPROPERTY(BlueprintReadOnly, Category = "NPC Schedule|State")
+	float WaitTimer = 0.0f;
 
 	// ---- Functions ----
 
-	/** Load schedule points from JSON via grid manager */
+	/** Load schedule and routes from JSON via grid manager */
 	UFUNCTION(BlueprintCallable, Category = "NPC Schedule")
 	bool LoadScheduleFromJSON();
 
-	/** Add a schedule point manually */
+	/** Add a patrol route */
 	UFUNCTION(BlueprintCallable, Category = "NPC Schedule")
-	void AddSchedulePoint(const FNPCSchedulePoint& Point);
+	void AddPatrolRoute(const FPatrolRoute& Route);
 
-	/** Clear all schedule points */
+	/** Add a schedule entry */
+	UFUNCTION(BlueprintCallable, Category = "NPC Schedule")
+	void AddScheduleEntry(const FNPCScheduleEntry& Entry);
+
+	/** Clear all schedule data */
 	UFUNCTION(BlueprintCallable, Category = "NPC Schedule")
 	void ClearSchedule();
 
@@ -127,21 +204,21 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "NPC Schedule")
 	void UpdateSchedule();
 
-	/** Get current schedule point (if any) */
+	/** Get patrol route by ID */
 	UFUNCTION(BlueprintPure, Category = "NPC Schedule")
-	bool GetCurrentTarget(FNPCSchedulePoint& OutPoint) const;
+	bool GetPatrolRoute(const FString& RouteId, FPatrolRoute& OutRoute) const;
 
-	/** Move to a specific schedule point */
-	UFUNCTION(BlueprintCallable, Category = "NPC Schedule")
-	void MoveToSchedulePoint(int32 PointIndex);
+	/** Get current schedule entry */
+	UFUNCTION(BlueprintPure, Category = "NPC Schedule")
+	bool GetCurrentScheduleEntry(FNPCScheduleEntry& OutEntry) const;
 
 	/** Stop current movement */
 	UFUNCTION(BlueprintCallable, Category = "NPC Schedule")
 	void StopMovement();
 
-	/** Teleport to a schedule point (for initial placement or cutscenes) */
+	/** Teleport to a specific location */
 	UFUNCTION(BlueprintCallable, Category = "NPC Schedule")
-	void TeleportToSchedulePoint(int32 PointIndex);
+	void TeleportToLocation(const FVector& WorldLocation, EGridDirection Facing);
 
 	/** Check if NPC has arrived at destination */
 	UFUNCTION(BlueprintPure, Category = "NPC Schedule")
@@ -149,17 +226,18 @@ public:
 
 	// ---- Events ----
 
-	/** Called when NPC starts moving to a new location */
-	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStartedMoving, const FNPCSchedulePoint&, TargetPoint);
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnScheduleChanged, int32, NewScheduleIndex, const FString&, Activity);
 	UPROPERTY(BlueprintAssignable, Category = "NPC Schedule|Events")
-	FOnStartedMoving OnStartedMoving;
+	FOnScheduleChanged OnScheduleChanged;
 
-	/** Called when NPC arrives at destination */
-	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnArrivedAtDestination, const FNPCSchedulePoint&, ArrivedPoint);
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnArrivedAtWaypoint, const FString&, WaypointName);
+	UPROPERTY(BlueprintAssignable, Category = "NPC Schedule|Events")
+	FOnArrivedAtWaypoint OnArrivedAtWaypoint;
+
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnArrivedAtDestination, const FString&, LocationName);
 	UPROPERTY(BlueprintAssignable, Category = "NPC Schedule|Events")
 	FOnArrivedAtDestination OnArrivedAtDestination;
 
-	/** Called when NPC's path is blocked */
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPathBlocked);
 	UPROPERTY(BlueprintAssignable, Category = "NPC Schedule|Events")
 	FOnPathBlocked OnPathBlocked;
@@ -176,12 +254,32 @@ protected:
 
 	float TimeSinceLastScheduleCheck = 0.0f;
 
-	/** Find best schedule point for current time */
-	int32 FindBestSchedulePoint() const;
+	/** Current target position */
+	FVector CurrentTargetPosition;
+	EGridDirection CurrentTargetFacing;
+	float CurrentArrivalTolerance = 50.0f;
+
+	/** Find best schedule entry for current time */
+	int32 FindActiveScheduleEntry() const;
+
+	/** Check if time is within a schedule entry's range */
+	bool IsTimeInRange(float CurrentTime, float StartTime, float EndTime) const;
+
+	/** Start following a schedule entry */
+	void ActivateScheduleEntry(int32 EntryIndex);
+
+	/** Move to next patrol waypoint */
+	void AdvancePatrolWaypoint();
+
+	/** Move to a world position */
+	void MoveToPosition(const FVector& Position, float Tolerance);
 
 	/** Execute movement toward current target */
 	void ExecuteMovement(float DeltaTime);
 
 	/** Update facing direction when arrived */
 	void UpdateFacingDirection();
+
+	/** Calculate world positions for a patrol route */
+	void CalculateRouteWorldPositions(FPatrolRoute& Route);
 };

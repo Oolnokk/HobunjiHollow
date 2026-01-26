@@ -59,8 +59,20 @@ void UNPCScheduleComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 		UpdateSchedule();
 	}
 
+	// Handle waiting at waypoint
+	if (bHasArrived && bIsPatrolling && WaitTimer > 0.0f)
+	{
+		WaitTimer -= DeltaTime;
+		if (WaitTimer <= 0.0f)
+		{
+			WaitTimer = 0.0f;
+			AdvancePatrolWaypoint();
+		}
+		return;
+	}
+
 	// Execute movement if we have a target
-	if (bIsMoving && CurrentTargetIndex >= 0)
+	if (bIsMoving)
 	{
 		ExecuteMovement(DeltaTime);
 	}
@@ -74,111 +86,123 @@ bool UNPCScheduleComponent::LoadScheduleFromJSON()
 		return false;
 	}
 
+	// Get schedule locations for this NPC
 	TArray<FMapScheduleLocation> JSONLocations = GridManager->GetNPCScheduleLocations(NPCId);
 
 	if (JSONLocations.Num() == 0)
 	{
-		UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent: No schedule locations found for NPC '%s'"), *NPCId);
+		UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent: No schedule data found for NPC '%s'"), *NPCId);
 		return false;
 	}
 
-	SchedulePoints.Empty();
+	// Create a patrol route from the locations
+	FPatrolRoute PatrolRoute;
+	PatrolRoute.RouteId = FString::Printf(TEXT("%s_patrol"), *NPCId);
+	PatrolRoute.bLooping = true;
 
 	for (const FMapScheduleLocation& JSONLoc : JSONLocations)
 	{
-		FNPCSchedulePoint Point;
-		Point.LocationName = JSONLoc.Name;
-		Point.GridPosition = JSONLoc.GetGridCoordinate();
-		Point.WorldPosition = GridManager->GridToWorldWithHeight(Point.GridPosition);
-		Point.Facing = JSONLoc.GetFacingDirection();
-		Point.Activities = JSONLoc.Activities;
-		Point.ArrivalTolerance = JSONLoc.ArrivalTolerance;
+		FPatrolWaypoint Waypoint;
+		Waypoint.Name = JSONLoc.Name;
+		Waypoint.GridPosition = JSONLoc.GetGridCoordinate();
+		Waypoint.WorldPosition = GridManager->GridToWorldWithHeight(Waypoint.GridPosition);
+		Waypoint.Facing = JSONLoc.GetFacingDirection();
+		Waypoint.ArrivalTolerance = JSONLoc.ArrivalTolerance;
+		Waypoint.WaitTime = 1.0f; // Default 1 second wait at each point
 
-		// Default time (can be extended in JSON format later)
-		Point.TimeOfDay = 8.0f;
-		Point.DayOfWeek = -1;
-		Point.Season = -1;
-
-		SchedulePoints.Add(Point);
+		PatrolRoute.Waypoints.Add(Waypoint);
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent: Loaded %d schedule points for NPC '%s'"),
-		SchedulePoints.Num(), *NPCId);
+	PatrolRoutes.Add(PatrolRoute);
+
+	// Create a default schedule entry for this patrol (6am - 6pm)
+	FNPCScheduleEntry DayShift;
+	DayShift.StartTime = 6.0f;
+	DayShift.EndTime = 18.0f;
+	DayShift.bIsPatrol = true;
+	DayShift.PatrolRouteId = PatrolRoute.RouteId;
+	DayShift.Activity = TEXT("patrolling");
+	Schedule.Add(DayShift);
+
+	// Create a "go home" entry for after shift (placeholder - goes to first waypoint)
+	if (PatrolRoute.Waypoints.Num() > 0)
+	{
+		FNPCScheduleEntry OffDuty;
+		OffDuty.StartTime = 18.0f;
+		OffDuty.EndTime = 6.0f;
+		OffDuty.bIsPatrol = false;
+		OffDuty.LocationName = TEXT("home");
+		OffDuty.Location = PatrolRoute.Waypoints[0].GridPosition; // Default to first point
+		OffDuty.Facing = EGridDirection::South;
+		OffDuty.Activity = TEXT("resting");
+		Schedule.Add(OffDuty);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent: Loaded %d waypoints for NPC '%s'"),
+		PatrolRoute.Waypoints.Num(), *NPCId);
 
 	return true;
 }
 
-void UNPCScheduleComponent::AddSchedulePoint(const FNPCSchedulePoint& Point)
+void UNPCScheduleComponent::AddPatrolRoute(const FPatrolRoute& Route)
 {
-	FNPCSchedulePoint NewPoint = Point;
+	FPatrolRoute NewRoute = Route;
+	CalculateRouteWorldPositions(NewRoute);
+	PatrolRoutes.Add(NewRoute);
+}
 
-	// Calculate world position if grid manager available
-	if (GridManager)
-	{
-		NewPoint.WorldPosition = GridManager->GridToWorldWithHeight(NewPoint.GridPosition);
-	}
-
-	SchedulePoints.Add(NewPoint);
+void UNPCScheduleComponent::AddScheduleEntry(const FNPCScheduleEntry& Entry)
+{
+	Schedule.Add(Entry);
 }
 
 void UNPCScheduleComponent::ClearSchedule()
 {
-	SchedulePoints.Empty();
-	CurrentTargetIndex = -1;
+	PatrolRoutes.Empty();
+	Schedule.Empty();
+	CurrentScheduleIndex = -1;
+	CurrentPatrolWaypointIndex = -1;
+	bIsPatrolling = false;
 	bIsMoving = false;
 	bHasArrived = false;
 }
 
 void UNPCScheduleComponent::UpdateSchedule()
 {
-	int32 BestIndex = FindBestSchedulePoint();
+	int32 ActiveEntry = FindActiveScheduleEntry();
 
-	if (BestIndex != CurrentTargetIndex && BestIndex >= 0)
+	if (ActiveEntry != CurrentScheduleIndex)
 	{
-		MoveToSchedulePoint(BestIndex);
+		ActivateScheduleEntry(ActiveEntry);
+	}
+	else if (bIsPatrolling && bHasArrived && WaitTimer <= 0.0f)
+	{
+		// Continue patrol if we've arrived and waited
+		AdvancePatrolWaypoint();
 	}
 }
 
-bool UNPCScheduleComponent::GetCurrentTarget(FNPCSchedulePoint& OutPoint) const
+bool UNPCScheduleComponent::GetPatrolRoute(const FString& RouteId, FPatrolRoute& OutRoute) const
 {
-	if (CurrentTargetIndex >= 0 && CurrentTargetIndex < SchedulePoints.Num())
+	for (const FPatrolRoute& Route : PatrolRoutes)
 	{
-		OutPoint = SchedulePoints[CurrentTargetIndex];
-		return true;
+		if (Route.RouteId == RouteId)
+		{
+			OutRoute = Route;
+			return true;
+		}
 	}
 	return false;
 }
 
-void UNPCScheduleComponent::MoveToSchedulePoint(int32 PointIndex)
+bool UNPCScheduleComponent::GetCurrentScheduleEntry(FNPCScheduleEntry& OutEntry) const
 {
-	if (PointIndex < 0 || PointIndex >= SchedulePoints.Num())
+	if (CurrentScheduleIndex >= 0 && CurrentScheduleIndex < Schedule.Num())
 	{
-		return;
+		OutEntry = Schedule[CurrentScheduleIndex];
+		return true;
 	}
-
-	CurrentTargetIndex = PointIndex;
-	bIsMoving = true;
-	bHasArrived = false;
-
-	const FNPCSchedulePoint& Target = SchedulePoints[PointIndex];
-
-	UE_LOG(LogTemp, Log, TEXT("NPC '%s' moving to '%s' at grid (%d, %d)"),
-		*NPCId, *Target.LocationName, Target.GridPosition.X, Target.GridPosition.Y);
-
-	OnStartedMoving.Broadcast(Target);
-
-	// Try to use AI navigation if available
-	if (AActor* Owner = GetOwner())
-	{
-		if (APawn* Pawn = Cast<APawn>(Owner))
-		{
-			if (AAIController* AIController = Cast<AAIController>(Pawn->GetController()))
-			{
-				AIController->MoveToLocation(Target.WorldPosition, Target.ArrivalTolerance);
-				return;
-			}
-		}
-	}
+	return false;
 }
 
 void UNPCScheduleComponent::StopMovement()
@@ -197,111 +221,206 @@ void UNPCScheduleComponent::StopMovement()
 	}
 }
 
-void UNPCScheduleComponent::TeleportToSchedulePoint(int32 PointIndex)
+void UNPCScheduleComponent::TeleportToLocation(const FVector& WorldLocation, EGridDirection Facing)
 {
-	if (PointIndex < 0 || PointIndex >= SchedulePoints.Num())
-	{
-		return;
-	}
-
-	const FNPCSchedulePoint& Target = SchedulePoints[PointIndex];
-
 	if (AActor* Owner = GetOwner())
 	{
-		Owner->SetActorLocation(Target.WorldPosition);
-
-		FRotator FacingRotation = UGridFunctionLibrary::DirectionToRotation(Target.Facing);
-		Owner->SetActorRotation(FacingRotation);
-
-		CurrentTargetIndex = PointIndex;
+		Owner->SetActorLocation(WorldLocation);
+		Owner->SetActorRotation(UGridFunctionLibrary::DirectionToRotation(Facing));
 		bIsMoving = false;
 		bHasArrived = true;
-
-		UE_LOG(LogTemp, Log, TEXT("NPC '%s' teleported to '%s'"), *NPCId, *Target.LocationName);
 	}
 }
 
 bool UNPCScheduleComponent::HasArrivedAtDestination() const
 {
-	if (CurrentTargetIndex < 0 || CurrentTargetIndex >= SchedulePoints.Num())
-	{
-		return false;
-	}
-
 	AActor* Owner = GetOwner();
 	if (!Owner)
 	{
 		return false;
 	}
 
-	const FNPCSchedulePoint& Target = SchedulePoints[CurrentTargetIndex];
-	float Distance = FVector::Dist2D(Owner->GetActorLocation(), Target.WorldPosition);
-
-	return Distance <= Target.ArrivalTolerance;
+	float Distance = FVector::Dist2D(Owner->GetActorLocation(), CurrentTargetPosition);
+	return Distance <= CurrentArrivalTolerance;
 }
 
-int32 UNPCScheduleComponent::FindBestSchedulePoint() const
+int32 UNPCScheduleComponent::FindActiveScheduleEntry() const
 {
-	if (SchedulePoints.Num() == 0)
+	if (Schedule.Num() == 0 || !TimeManager)
 	{
 		return -1;
 	}
 
-	// If no time manager, just return first point
-	if (!TimeManager)
-	{
-		return 0;
-	}
-
 	float CurrentTime = TimeManager->CurrentTime;
-	int32 CurrentDay = TimeManager->CurrentDay % 7; // Day of week
+	int32 CurrentDay = TimeManager->CurrentDay % 7;
 	int32 CurrentSeason = static_cast<int32>(TimeManager->CurrentSeason);
 
-	int32 BestIndex = -1;
-	float BestTimeDiff = 24.0f; // Max possible difference
-
-	for (int32 i = 0; i < SchedulePoints.Num(); ++i)
+	for (int32 i = 0; i < Schedule.Num(); ++i)
 	{
-		const FNPCSchedulePoint& Point = SchedulePoints[i];
+		const FNPCScheduleEntry& Entry = Schedule[i];
 
 		// Check day filter
-		if (Point.DayOfWeek >= 0 && Point.DayOfWeek != CurrentDay)
+		if (Entry.DayOfWeek >= 0 && Entry.DayOfWeek != CurrentDay)
 		{
 			continue;
 		}
 
 		// Check season filter
-		if (Point.Season >= 0 && Point.Season != CurrentSeason)
+		if (Entry.Season >= 0 && Entry.Season != CurrentSeason)
 		{
 			continue;
 		}
 
-		// Find closest time that has passed
-		float TimeDiff = CurrentTime - Point.TimeOfDay;
-		if (TimeDiff < 0)
+		// Check time range
+		if (IsTimeInRange(CurrentTime, Entry.StartTime, Entry.EndTime))
 		{
-			TimeDiff += 24.0f; // Wrap around
-		}
-
-		if (TimeDiff < BestTimeDiff)
-		{
-			BestTimeDiff = TimeDiff;
-			BestIndex = i;
+			return i;
 		}
 	}
 
-	// If nothing found, use first applicable point
-	if (BestIndex < 0 && SchedulePoints.Num() > 0)
+	return -1;
+}
+
+bool UNPCScheduleComponent::IsTimeInRange(float CurrentTime, float StartTime, float EndTime) const
+{
+	if (StartTime <= EndTime)
 	{
-		BestIndex = 0;
+		// Normal range (e.g., 9am to 5pm)
+		return CurrentTime >= StartTime && CurrentTime < EndTime;
+	}
+	else
+	{
+		// Wrapping range (e.g., 10pm to 6am)
+		return CurrentTime >= StartTime || CurrentTime < EndTime;
+	}
+}
+
+void UNPCScheduleComponent::ActivateScheduleEntry(int32 EntryIndex)
+{
+	if (EntryIndex < 0 || EntryIndex >= Schedule.Num())
+	{
+		CurrentScheduleIndex = -1;
+		bIsPatrolling = false;
+		bIsMoving = false;
+		return;
 	}
 
-	return BestIndex;
+	CurrentScheduleIndex = EntryIndex;
+	const FNPCScheduleEntry& Entry = Schedule[EntryIndex];
+	CurrentActivity = Entry.Activity;
+
+	UE_LOG(LogTemp, Log, TEXT("NPC '%s' activating schedule entry %d: %s"),
+		*NPCId, EntryIndex, *Entry.Activity);
+
+	OnScheduleChanged.Broadcast(EntryIndex, Entry.Activity);
+
+	if (Entry.bIsPatrol)
+	{
+		// Start patrol
+		FPatrolRoute Route;
+		if (GetPatrolRoute(Entry.PatrolRouteId, Route) && Route.Waypoints.Num() > 0)
+		{
+			bIsPatrolling = true;
+			CurrentPatrolWaypointIndex = 0;
+
+			const FPatrolWaypoint& FirstWaypoint = Route.Waypoints[0];
+			CurrentTargetPosition = FirstWaypoint.WorldPosition;
+			CurrentTargetFacing = FirstWaypoint.Facing;
+			CurrentArrivalTolerance = FirstWaypoint.ArrivalTolerance;
+
+			MoveToPosition(CurrentTargetPosition, CurrentArrivalTolerance);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("NPC '%s' cannot find patrol route '%s'"),
+				*NPCId, *Entry.PatrolRouteId);
+		}
+	}
+	else
+	{
+		// Go to single location
+		bIsPatrolling = false;
+		CurrentPatrolWaypointIndex = -1;
+
+		if (GridManager)
+		{
+			CurrentTargetPosition = GridManager->GridToWorldWithHeight(Entry.Location);
+		}
+		else
+		{
+			CurrentTargetPosition = FVector(Entry.Location.X * 100.0f, Entry.Location.Y * 100.0f, 0.0f);
+		}
+		CurrentTargetFacing = Entry.Facing;
+		CurrentArrivalTolerance = 50.0f;
+
+		MoveToPosition(CurrentTargetPosition, CurrentArrivalTolerance);
+
+		UE_LOG(LogTemp, Log, TEXT("NPC '%s' going to '%s'"), *NPCId, *Entry.LocationName);
+	}
+}
+
+void UNPCScheduleComponent::AdvancePatrolWaypoint()
+{
+	if (!bIsPatrolling || CurrentScheduleIndex < 0)
+	{
+		return;
+	}
+
+	const FNPCScheduleEntry& Entry = Schedule[CurrentScheduleIndex];
+	FPatrolRoute Route;
+	if (!GetPatrolRoute(Entry.PatrolRouteId, Route) || Route.Waypoints.Num() == 0)
+	{
+		return;
+	}
+
+	// Move to next waypoint
+	CurrentPatrolWaypointIndex++;
+
+	if (CurrentPatrolWaypointIndex >= Route.Waypoints.Num())
+	{
+		if (Route.bLooping)
+		{
+			CurrentPatrolWaypointIndex = 0;
+		}
+		else
+		{
+			// Patrol complete
+			bIsPatrolling = false;
+			bIsMoving = false;
+			return;
+		}
+	}
+
+	const FPatrolWaypoint& Waypoint = Route.Waypoints[CurrentPatrolWaypointIndex];
+	CurrentTargetPosition = Waypoint.WorldPosition;
+	CurrentTargetFacing = Waypoint.Facing;
+	CurrentArrivalTolerance = Waypoint.ArrivalTolerance;
+	bHasArrived = false;
+
+	MoveToPosition(CurrentTargetPosition, CurrentArrivalTolerance);
+}
+
+void UNPCScheduleComponent::MoveToPosition(const FVector& Position, float Tolerance)
+{
+	bIsMoving = true;
+	bHasArrived = false;
+
+	// Try to use AI navigation
+	if (AActor* Owner = GetOwner())
+	{
+		if (APawn* Pawn = Cast<APawn>(Owner))
+		{
+			if (AAIController* AIController = Cast<AAIController>(Pawn->GetController()))
+			{
+				AIController->MoveToLocation(Position, Tolerance);
+			}
+		}
+	}
 }
 
 void UNPCScheduleComponent::ExecuteMovement(float DeltaTime)
 {
-	if (!bIsMoving || CurrentTargetIndex < 0)
+	if (!bIsMoving)
 	{
 		return;
 	}
@@ -316,15 +435,37 @@ void UNPCScheduleComponent::ExecuteMovement(float DeltaTime)
 
 			UpdateFacingDirection();
 
-			const FNPCSchedulePoint& Target = SchedulePoints[CurrentTargetIndex];
-			UE_LOG(LogTemp, Log, TEXT("NPC '%s' arrived at '%s'"), *NPCId, *Target.LocationName);
+			if (bIsPatrolling)
+			{
+				// Get current waypoint for wait time
+				const FNPCScheduleEntry& Entry = Schedule[CurrentScheduleIndex];
+				FPatrolRoute Route;
+				if (GetPatrolRoute(Entry.PatrolRouteId, Route) &&
+					CurrentPatrolWaypointIndex >= 0 &&
+					CurrentPatrolWaypointIndex < Route.Waypoints.Num())
+				{
+					const FPatrolWaypoint& Waypoint = Route.Waypoints[CurrentPatrolWaypointIndex];
+					WaitTimer = Waypoint.WaitTime;
 
-			OnArrivedAtDestination.Broadcast(Target);
+					UE_LOG(LogTemp, Log, TEXT("NPC '%s' arrived at waypoint '%s', waiting %.1fs"),
+						*NPCId, *Waypoint.Name, WaitTimer);
+
+					OnArrivedAtWaypoint.Broadcast(Waypoint.Name);
+				}
+			}
+			else
+			{
+				const FNPCScheduleEntry& Entry = Schedule[CurrentScheduleIndex];
+				UE_LOG(LogTemp, Log, TEXT("NPC '%s' arrived at destination '%s'"),
+					*NPCId, *Entry.LocationName);
+
+				OnArrivedAtDestination.Broadcast(Entry.LocationName);
+			}
 		}
 		return;
 	}
 
-	// Simple direct movement fallback (if no AI controller)
+	// Fallback: simple direct movement for non-AI pawns
 	AActor* Owner = GetOwner();
 	if (!Owner)
 	{
@@ -341,13 +482,12 @@ void UNPCScheduleComponent::ExecuteMovement(float DeltaTime)
 		}
 	}
 
-	// Fallback: simple direct movement for non-AI pawns
-	const FNPCSchedulePoint& Target = SchedulePoints[CurrentTargetIndex];
+	// Fallback: simple direct movement
 	FVector CurrentLoc = Owner->GetActorLocation();
-	FVector Direction = (Target.WorldPosition - CurrentLoc).GetSafeNormal2D();
+	FVector Direction = (CurrentTargetPosition - CurrentLoc).GetSafeNormal2D();
 
 	FVector NewLocation = CurrentLoc + Direction * WalkSpeed * DeltaTime;
-	NewLocation.Z = CurrentLoc.Z; // Preserve Z
+	NewLocation.Z = CurrentLoc.Z;
 
 	Owner->SetActorLocation(NewLocation);
 
@@ -361,18 +501,24 @@ void UNPCScheduleComponent::ExecuteMovement(float DeltaTime)
 
 void UNPCScheduleComponent::UpdateFacingDirection()
 {
-	if (CurrentTargetIndex < 0 || CurrentTargetIndex >= SchedulePoints.Num())
-	{
-		return;
-	}
-
 	AActor* Owner = GetOwner();
 	if (!Owner)
 	{
 		return;
 	}
 
-	const FNPCSchedulePoint& Target = SchedulePoints[CurrentTargetIndex];
-	FRotator FacingRotation = UGridFunctionLibrary::DirectionToRotation(Target.Facing);
-	Owner->SetActorRotation(FacingRotation);
+	Owner->SetActorRotation(UGridFunctionLibrary::DirectionToRotation(CurrentTargetFacing));
+}
+
+void UNPCScheduleComponent::CalculateRouteWorldPositions(FPatrolRoute& Route)
+{
+	if (!GridManager)
+	{
+		return;
+	}
+
+	for (FPatrolWaypoint& Waypoint : Route.Waypoints)
+	{
+		Waypoint.WorldPosition = GridManager->GridToWorldWithHeight(Waypoint.GridPosition);
+	}
 }
