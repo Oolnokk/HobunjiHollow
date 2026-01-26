@@ -8,6 +8,9 @@ This document outlines the design for a **hybrid movement/placement system** ins
 - **Object placement**: Grid-based (snapped to discrete tiles)
 - **NPC pathing**: Grid-targeted with flexible actual positioning
 
+### Related Documentation
+- **[Map Data Format](./MapDataFormat.md)** - JSON schema for external map authoring
+
 ---
 
 ## Core Principles
