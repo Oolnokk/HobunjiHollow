@@ -9,6 +9,9 @@
 
 class UFarmGridManager;
 
+/** Delegate for bounds events */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnBoundsEvent);
+
 /**
  * Component that enforces playable bounds on the owning actor.
  * Add to your player character to restrict movement to the defined zones.
@@ -75,11 +78,11 @@ public:
 
 	/** Called when actor hits the bounds edge */
 	UPROPERTY(BlueprintAssignable, Category = "Bounds|Events")
-	FSimpleMulticastDelegate OnHitBounds;
+	FOnBoundsEvent OnHitBounds;
 
 	/** Called when actor re-enters valid bounds */
 	UPROPERTY(BlueprintAssignable, Category = "Bounds|Events")
-	FSimpleMulticastDelegate OnEnteredBounds;
+	FOnBoundsEvent OnEnteredBounds;
 
 protected:
 	virtual void BeginPlay() override;
