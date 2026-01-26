@@ -2,6 +2,7 @@
 
 #include "GridPlaceableTree.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/CapsuleComponent.h"
 
 AGridPlaceableTree::AGridPlaceableTree()
 {
@@ -11,10 +12,18 @@ AGridPlaceableTree::AGridPlaceableTree()
 	RootSceneComponent = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	RootComponent = RootSceneComponent;
 
-	// Create mesh components
+	// Create capsule collision for smooth sliding
+	CollisionCapsule = CreateDefaultSubobject<UCapsuleComponent>(TEXT("CollisionCapsule"));
+	CollisionCapsule->SetupAttachment(RootComponent);
+	CollisionCapsule->SetCapsuleRadius(CollisionRadius);
+	CollisionCapsule->SetCapsuleHalfHeight(CollisionHalfHeight);
+	CollisionCapsule->SetCollisionProfileName(TEXT("BlockAll"));
+	CollisionCapsule->SetRelativeLocation(FVector(0.0f, 0.0f, CollisionHalfHeight));
+
+	// Create mesh components (visuals only, no collision)
 	TrunkMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("TrunkMesh"));
 	TrunkMesh->SetupAttachment(RootComponent);
-	TrunkMesh->SetCollisionProfileName(TEXT("BlockAll"));
+	TrunkMesh->SetCollisionProfileName(TEXT("NoCollision"));
 
 	LeavesMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("LeavesMesh"));
 	LeavesMesh->SetupAttachment(TrunkMesh);
@@ -22,7 +31,7 @@ AGridPlaceableTree::AGridPlaceableTree()
 
 	StumpMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("StumpMesh"));
 	StumpMesh->SetupAttachment(RootComponent);
-	StumpMesh->SetCollisionProfileName(TEXT("BlockAll"));
+	StumpMesh->SetCollisionProfileName(TEXT("NoCollision"));
 	StumpMesh->SetVisibility(false);
 
 	// Set default seed IDs based on tree type (can be overridden in BP)

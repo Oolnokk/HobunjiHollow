@@ -8,6 +8,7 @@
 #include "GridPlaceableTree.generated.h"
 
 class UStaticMeshComponent;
+class UCapsuleComponent;
 
 /**
  * Tree types that can be placed on the grid
@@ -115,6 +116,20 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	UStaticMeshComponent* StumpMesh;
+
+	/** Capsule collision for smooth character sliding */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	UCapsuleComponent* CollisionCapsule;
+
+	// ---- Collision Configuration ----
+
+	/** Radius of the collision capsule */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tree|Collision")
+	float CollisionRadius = 30.0f;
+
+	/** Half-height of the collision capsule */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tree|Collision")
+	float CollisionHalfHeight = 100.0f;
 
 	// ---- Interaction ----
 
