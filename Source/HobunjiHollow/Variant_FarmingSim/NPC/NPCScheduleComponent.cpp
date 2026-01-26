@@ -75,6 +75,12 @@ void UNPCScheduleComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 	if (bIsMoving)
 	{
 		ExecuteMovement(DeltaTime);
+
+		// If following road and arrived at current road waypoint, advance to next
+		if (bIsFollowingRoad && HasArrivedAtDestination())
+		{
+			AdvanceRoadPath();
+		}
 	}
 }
 
@@ -404,6 +410,23 @@ void UNPCScheduleComponent::MoveToPosition(const FVector& Position, float Tolera
 {
 	bIsMoving = true;
 	bHasArrived = false;
+	bIsFollowingRoad = false;
+	CurrentRoadPath.Empty();
+	CurrentRoadPathIndex = 0;
+
+	// Store final destination info
+	FinalDestination = Position;
+	FinalFacing = CurrentTargetFacing;
+
+	// Try to use road navigation if enabled
+	if (bUseRoads && TryUseRoadNavigation(Position, CurrentTargetFacing))
+	{
+		// Road navigation was set up, first waypoint is now the target
+		return;
+	}
+
+	// Direct navigation (no roads or roads not available)
+	CurrentTargetPosition = Position;
 
 	// Try to use AI navigation
 	if (AActor* Owner = GetOwner())
@@ -520,5 +543,113 @@ void UNPCScheduleComponent::CalculateRouteWorldPositions(FPatrolRoute& Route)
 	for (FPatrolWaypoint& Waypoint : Route.Waypoints)
 	{
 		Waypoint.WorldPosition = GridManager->GridToWorldWithHeight(Waypoint.GridPosition);
+	}
+}
+
+bool UNPCScheduleComponent::TryUseRoadNavigation(const FVector& Destination, EGridDirection TargetFacing)
+{
+	if (!GridManager)
+	{
+		return false;
+	}
+
+	AActor* Owner = GetOwner();
+	if (!Owner)
+	{
+		return false;
+	}
+
+	// Get current position in grid coordinates
+	FGridCoordinate StartGrid = GridManager->WorldToGrid(Owner->GetActorLocation());
+	FGridCoordinate EndGrid = GridManager->WorldToGrid(Destination);
+
+	// Try to find a road path
+	TArray<FVector> RoadPath;
+	if (!GridManager->FindRoadPath(StartGrid, EndGrid, RoadPath))
+	{
+		return false;
+	}
+
+	// Need at least 3 points for road navigation to be worthwhile
+	// (start -> road waypoints -> end)
+	if (RoadPath.Num() < 3)
+	{
+		return false;
+	}
+
+	// Set up road navigation
+	CurrentRoadPath = RoadPath;
+	CurrentRoadPathIndex = 0;
+	bIsFollowingRoad = true;
+
+	// Set first waypoint as current target
+	CurrentTargetPosition = CurrentRoadPath[0];
+
+	UE_LOG(LogTemp, Log, TEXT("NPC '%s' using road navigation with %d waypoints"),
+		*NPCId, CurrentRoadPath.Num());
+
+	// Start moving to first road waypoint
+	if (APawn* Pawn = Cast<APawn>(Owner))
+	{
+		if (AAIController* AIController = Cast<AAIController>(Pawn->GetController()))
+		{
+			AIController->MoveToLocation(CurrentTargetPosition, CurrentArrivalTolerance);
+		}
+	}
+
+	return true;
+}
+
+void UNPCScheduleComponent::AdvanceRoadPath()
+{
+	if (!bIsFollowingRoad || CurrentRoadPath.Num() == 0)
+	{
+		return;
+	}
+
+	CurrentRoadPathIndex++;
+
+	if (CurrentRoadPathIndex >= CurrentRoadPath.Num())
+	{
+		// Reached end of road path, finish navigation
+		bIsFollowingRoad = false;
+		CurrentRoadPath.Empty();
+		CurrentRoadPathIndex = 0;
+
+		// Set final destination as target
+		CurrentTargetPosition = FinalDestination;
+		CurrentTargetFacing = FinalFacing;
+		bHasArrived = false;
+
+		UE_LOG(LogTemp, Log, TEXT("NPC '%s' finished road navigation, heading to final destination"),
+			*NPCId);
+
+		// Move to final destination
+		if (AActor* Owner = GetOwner())
+		{
+			if (APawn* Pawn = Cast<APawn>(Owner))
+			{
+				if (AAIController* AIController = Cast<AAIController>(Pawn->GetController()))
+				{
+					AIController->MoveToLocation(CurrentTargetPosition, CurrentArrivalTolerance);
+				}
+			}
+		}
+		return;
+	}
+
+	// Move to next road waypoint
+	CurrentTargetPosition = CurrentRoadPath[CurrentRoadPathIndex];
+	bHasArrived = false;
+
+	if (AActor* Owner = GetOwner())
+	{
+		if (APawn* Pawn = Cast<APawn>(Owner))
+		{
+			if (AAIController* AIController = Cast<AAIController>(Pawn->GetController()))
+			{
+				AIController->MoveToLocation(CurrentTargetPosition, CurrentArrivalTolerance);
+			}
+		}
 	}
 }

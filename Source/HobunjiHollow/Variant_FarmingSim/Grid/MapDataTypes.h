@@ -202,6 +202,76 @@ struct HOBUNJIHOLLOW_API FMapScheduleLocation
 };
 
 /**
+ * A waypoint on a road network
+ */
+USTRUCT(BlueprintType)
+struct HOBUNJIHOLLOW_API FRoadWaypoint
+{
+	GENERATED_BODY()
+
+	/** Optional name for this waypoint (e.g., "town_center", "farm_entrance") */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data")
+	FString Name;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data")
+	int32 X = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data")
+	int32 Y = 0;
+
+	FGridCoordinate GetGridCoordinate() const { return FGridCoordinate(X, Y); }
+
+	/** Calculate squared distance to another grid position */
+	float DistanceSquaredTo(const FGridCoordinate& Other) const
+	{
+		float DX = static_cast<float>(X - Other.X);
+		float DY = static_cast<float>(Y - Other.Y);
+		return DX * DX + DY * DY;
+	}
+};
+
+/**
+ * Road data for shared navigation paths
+ */
+USTRUCT(BlueprintType)
+struct HOBUNJIHOLLOW_API FMapRoadData
+{
+	GENERATED_BODY()
+
+	/** Unique identifier for this road */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data")
+	FString Id;
+
+	/** Waypoints defining the road path */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data")
+	TArray<FRoadWaypoint> Waypoints;
+
+	/** If true, NPCs can travel this road in both directions */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data")
+	bool bBidirectional = true;
+
+	/** Speed multiplier when traveling on this road (1.0 = normal) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data")
+	float SpeedMultiplier = 1.0f;
+
+	/** IDs of roads that connect to this one */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data")
+	TArray<FString> ConnectedRoads;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data")
+	TMap<FString, FString> Properties;
+
+	/** Find the waypoint index nearest to a grid position */
+	int32 FindNearestWaypointIndex(const FGridCoordinate& Position) const;
+
+	/** Find waypoint by name */
+	int32 FindWaypointByName(const FString& WaypointName) const;
+
+	/** Get total road length in grid units */
+	float GetTotalLength() const;
+};
+
+/**
  * Path or NPC schedule path data
  */
 USTRUCT(BlueprintType)
@@ -225,6 +295,7 @@ struct HOBUNJIHOLLOW_API FMapPathData
 	TMap<FString, FString> Properties;
 
 	bool IsNPCSchedule() const { return Type == TEXT("schedule_points") && !NpcId.IsEmpty(); }
+	bool IsRoad() const { return Type == TEXT("road"); }
 };
 
 /**
@@ -363,6 +434,9 @@ struct HOBUNJIHOLLOW_API FMapData
 	TArray<FMapPathData> Paths;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data")
+	TArray<FMapRoadData> Roads;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data")
 	TArray<FMapConnectionData> Connections;
 
 	/** Find a spawn point by ID */
@@ -373,6 +447,15 @@ struct HOBUNJIHOLLOW_API FMapData
 
 	/** Get NPC schedule locations */
 	TArray<FMapScheduleLocation> GetNPCScheduleLocations(const FString& NpcId) const;
+
+	/** Find a road by ID */
+	const FMapRoadData* FindRoad(const FString& RoadId) const;
+
+	/** Find the nearest road entry point to a grid position */
+	bool FindNearestRoadEntry(const FGridCoordinate& Position, FString& OutRoadId, int32& OutWaypointIndex) const;
+
+	/** Get all roads in the map */
+	const TArray<FMapRoadData>& GetRoads() const { return Roads; }
 };
 
 /**

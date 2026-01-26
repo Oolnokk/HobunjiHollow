@@ -307,52 +307,106 @@ void AMapDataImporter::ParsePathsLayer(const TSharedPtr<FJsonObject>& LayersObje
 			const TSharedPtr<FJsonObject>* PathObject;
 			if (Value->TryGetObject(PathObject))
 			{
-				FMapPathData Path;
-				(*PathObject)->TryGetStringField(TEXT("id"), Path.Id);
-				(*PathObject)->TryGetStringField(TEXT("type"), Path.Type);
-				(*PathObject)->TryGetStringField(TEXT("npcId"), Path.NpcId);
+				FString PathType;
+				(*PathObject)->TryGetStringField(TEXT("type"), PathType);
 
-				// Parse locations
-				const TArray<TSharedPtr<FJsonValue>>* LocationsArray;
-				if ((*PathObject)->TryGetArrayField(TEXT("locations"), LocationsArray))
+				// Check if this is a road-type path
+				if (PathType == TEXT("road"))
 				{
-					for (const TSharedPtr<FJsonValue>& LocValue : *LocationsArray)
+					FMapRoadData Road;
+					(*PathObject)->TryGetStringField(TEXT("id"), Road.Id);
+					(*PathObject)->TryGetBoolField(TEXT("bidirectional"), Road.bBidirectional);
+					(*PathObject)->TryGetNumberField(TEXT("speedMultiplier"), Road.SpeedMultiplier);
+
+					// Parse waypoints
+					const TArray<TSharedPtr<FJsonValue>>* WaypointsArray;
+					if ((*PathObject)->TryGetArrayField(TEXT("waypoints"), WaypointsArray))
 					{
-						const TSharedPtr<FJsonObject>* LocObject;
-						if (LocValue->TryGetObject(LocObject))
+						for (const TSharedPtr<FJsonValue>& WpValue : *WaypointsArray)
 						{
-							FMapScheduleLocation Location;
-							(*LocObject)->TryGetStringField(TEXT("name"), Location.Name);
-							(*LocObject)->TryGetNumberField(TEXT("x"), Location.X);
-							(*LocObject)->TryGetNumberField(TEXT("y"), Location.Y);
-							(*LocObject)->TryGetStringField(TEXT("facing"), Location.Facing);
-							(*LocObject)->TryGetNumberField(TEXT("arrivalTolerance"), Location.ArrivalTolerance);
-
-							// Parse activities array
-							const TArray<TSharedPtr<FJsonValue>>* ActivitiesArray;
-							if ((*LocObject)->TryGetArrayField(TEXT("activities"), ActivitiesArray))
+							const TSharedPtr<FJsonObject>* WpObject;
+							if (WpValue->TryGetObject(WpObject))
 							{
-								for (const TSharedPtr<FJsonValue>& ActValue : *ActivitiesArray)
-								{
-									FString Activity;
-									if (ActValue->TryGetString(Activity))
-									{
-										Location.Activities.Add(Activity);
-									}
-								}
+								FRoadWaypoint Waypoint;
+								(*WpObject)->TryGetStringField(TEXT("name"), Waypoint.Name);
+								(*WpObject)->TryGetNumberField(TEXT("x"), Waypoint.X);
+								(*WpObject)->TryGetNumberField(TEXT("y"), Waypoint.Y);
+								Road.Waypoints.Add(Waypoint);
 							}
-
-							Path.Locations.Add(Location);
 						}
 					}
-				}
 
-				if (const TSharedPtr<FJsonObject>* PropsObject = nullptr; (*PathObject)->TryGetObjectField(TEXT("properties"), PropsObject))
+					// Parse connected roads
+					const TArray<TSharedPtr<FJsonValue>>* ConnectedArray;
+					if ((*PathObject)->TryGetArrayField(TEXT("connectedRoads"), ConnectedArray))
+					{
+						for (const TSharedPtr<FJsonValue>& ConnValue : *ConnectedArray)
+						{
+							FString ConnectedId;
+							if (ConnValue->TryGetString(ConnectedId))
+							{
+								Road.ConnectedRoads.Add(ConnectedId);
+							}
+						}
+					}
+
+					if (const TSharedPtr<FJsonObject>* PropsObject = nullptr; (*PathObject)->TryGetObjectField(TEXT("properties"), PropsObject))
+					{
+						Road.Properties = ParsePropertiesObject(*PropsObject);
+					}
+
+					ParsedMapData.Roads.Add(Road);
+				}
+				else
 				{
-					Path.Properties = ParsePropertiesObject(*PropsObject);
-				}
+					// Regular path or NPC schedule
+					FMapPathData Path;
+					Path.Type = PathType;
+					(*PathObject)->TryGetStringField(TEXT("id"), Path.Id);
+					(*PathObject)->TryGetStringField(TEXT("npcId"), Path.NpcId);
 
-				ParsedMapData.Paths.Add(Path);
+					// Parse locations
+					const TArray<TSharedPtr<FJsonValue>>* LocationsArray;
+					if ((*PathObject)->TryGetArrayField(TEXT("locations"), LocationsArray))
+					{
+						for (const TSharedPtr<FJsonValue>& LocValue : *LocationsArray)
+						{
+							const TSharedPtr<FJsonObject>* LocObject;
+							if (LocValue->TryGetObject(LocObject))
+							{
+								FMapScheduleLocation Location;
+								(*LocObject)->TryGetStringField(TEXT("name"), Location.Name);
+								(*LocObject)->TryGetNumberField(TEXT("x"), Location.X);
+								(*LocObject)->TryGetNumberField(TEXT("y"), Location.Y);
+								(*LocObject)->TryGetStringField(TEXT("facing"), Location.Facing);
+								(*LocObject)->TryGetNumberField(TEXT("arrivalTolerance"), Location.ArrivalTolerance);
+
+								// Parse activities array
+								const TArray<TSharedPtr<FJsonValue>>* ActivitiesArray;
+								if ((*LocObject)->TryGetArrayField(TEXT("activities"), ActivitiesArray))
+								{
+									for (const TSharedPtr<FJsonValue>& ActValue : *ActivitiesArray)
+									{
+										FString Activity;
+										if (ActValue->TryGetString(Activity))
+										{
+											Location.Activities.Add(Activity);
+										}
+									}
+								}
+
+								Path.Locations.Add(Location);
+							}
+						}
+					}
+
+					if (const TSharedPtr<FJsonObject>* PropsObject = nullptr; (*PathObject)->TryGetObjectField(TEXT("properties"), PropsObject))
+					{
+						Path.Properties = ParsePropertiesObject(*PropsObject);
+					}
+
+					ParsedMapData.Paths.Add(Path);
+				}
 			}
 		}
 	}

@@ -60,6 +60,9 @@ void UFarmGridManager::InitializeFromMapData(const FMapData& MapData)
 	// Store paths
 	Paths = MapData.Paths;
 
+	// Store roads
+	Roads = MapData.Roads;
+
 	// Store spawners
 	Spawners = MapData.Spawners;
 }
@@ -70,6 +73,7 @@ void UFarmGridManager::ClearGrid()
 	Zones.Empty();
 	Connections.Empty();
 	Paths.Empty();
+	Roads.Empty();
 	Spawners.Empty();
 	DefaultTerrainType = ETerrainType::Default;
 }
@@ -483,4 +487,196 @@ FGridCell& UFarmGridManager::GetOrCreateCell(const FGridCoordinate& Coord)
 	FGridCell NewCell;
 	NewCell.TerrainType = DefaultTerrainType;
 	return GridCells.Add(Coord, NewCell);
+}
+
+// ---- Road Network ----
+
+bool UFarmGridManager::GetRoad(const FString& RoadId, FMapRoadData& OutRoad) const
+{
+	for (const FMapRoadData& Road : Roads)
+	{
+		if (Road.Id == RoadId)
+		{
+			OutRoad = Road;
+			return true;
+		}
+	}
+	return false;
+}
+
+bool UFarmGridManager::FindNearestRoadEntry(const FGridCoordinate& Position, FString& OutRoadId, int32& OutWaypointIndex, float MaxDistance) const
+{
+	if (Roads.Num() == 0)
+	{
+		return false;
+	}
+
+	float BestDistSq = MaxDistance * MaxDistance;
+	const FMapRoadData* BestRoad = nullptr;
+	int32 BestWaypointIndex = -1;
+
+	for (const FMapRoadData& Road : Roads)
+	{
+		int32 NearestIdx = Road.FindNearestWaypointIndex(Position);
+		if (NearestIdx >= 0)
+		{
+			float DistSq = Road.Waypoints[NearestIdx].DistanceSquaredTo(Position);
+			if (DistSq < BestDistSq)
+			{
+				BestDistSq = DistSq;
+				BestRoad = &Road;
+				BestWaypointIndex = NearestIdx;
+			}
+		}
+	}
+
+	if (BestRoad)
+	{
+		OutRoadId = BestRoad->Id;
+		OutWaypointIndex = BestWaypointIndex;
+		return true;
+	}
+
+	return false;
+}
+
+TArray<FVector> UFarmGridManager::GetRoadSegmentWorldPositions(const FString& RoadId, int32 StartIndex, int32 EndIndex) const
+{
+	TArray<FVector> Result;
+
+	FMapRoadData Road;
+	if (!GetRoad(RoadId, Road))
+	{
+		return Result;
+	}
+
+	if (StartIndex < 0 || EndIndex < 0 ||
+		StartIndex >= Road.Waypoints.Num() || EndIndex >= Road.Waypoints.Num())
+	{
+		return Result;
+	}
+
+	// Determine direction
+	int32 Step = (EndIndex >= StartIndex) ? 1 : -1;
+
+	for (int32 i = StartIndex; ; i += Step)
+	{
+		const FRoadWaypoint& Waypoint = Road.Waypoints[i];
+		FVector WorldPos = GridToWorldWithHeight(Waypoint.GetGridCoordinate());
+		Result.Add(WorldPos);
+
+		if (i == EndIndex)
+		{
+			break;
+		}
+	}
+
+	return Result;
+}
+
+bool UFarmGridManager::FindRoadPath(const FGridCoordinate& Start, const FGridCoordinate& Destination, TArray<FVector>& OutPath) const
+{
+	OutPath.Empty();
+
+	if (Roads.Num() == 0)
+	{
+		return false;
+	}
+
+	// Find nearest road entry from start position
+	FString StartRoadId;
+	int32 StartWaypointIdx;
+	if (!FindNearestRoadEntry(Start, StartRoadId, StartWaypointIdx))
+	{
+		return false;
+	}
+
+	// Find nearest road entry to destination
+	FString EndRoadId;
+	int32 EndWaypointIdx;
+	if (!FindNearestRoadEntry(Destination, EndRoadId, EndWaypointIdx))
+	{
+		return false;
+	}
+
+	// For simple case: both on same road
+	if (StartRoadId == EndRoadId)
+	{
+		FMapRoadData Road;
+		if (GetRoad(StartRoadId, Road))
+		{
+			// Check if we can travel in the needed direction
+			bool bForward = EndWaypointIdx >= StartWaypointIdx;
+			if (!bForward && !Road.bBidirectional)
+			{
+				// Need to go backwards but road is one-way - go to start then to end
+				// Add path: start -> waypoint 0 -> end waypoint
+				TArray<FVector> ToStart = GetRoadSegmentWorldPositions(StartRoadId, StartWaypointIdx, 0);
+				TArray<FVector> ToEnd = GetRoadSegmentWorldPositions(StartRoadId, 0, EndWaypointIdx);
+
+				// Add walk-to-road segment
+				OutPath.Add(GridToWorldWithHeight(Start));
+				OutPath.Append(ToStart);
+				OutPath.Append(ToEnd);
+				OutPath.Add(GridToWorldWithHeight(Destination));
+				return true;
+			}
+
+			// Direct path along road
+			OutPath.Add(GridToWorldWithHeight(Start));
+			OutPath.Append(GetRoadSegmentWorldPositions(StartRoadId, StartWaypointIdx, EndWaypointIdx));
+			OutPath.Add(GridToWorldWithHeight(Destination));
+			return true;
+		}
+	}
+
+	// Different roads - for now just use direct path to start road, along road, off road to destination
+	// A more complex implementation would search connected roads
+	OutPath.Add(GridToWorldWithHeight(Start));
+
+	FMapRoadData StartRoad;
+	if (GetRoad(StartRoadId, StartRoad))
+	{
+		// Walk along start road toward destination
+		FVector DestWorld = GridToWorld(Destination);
+
+		// Find which end of the road is closer to destination
+		if (StartRoad.Waypoints.Num() > 0)
+		{
+			FVector FirstWaypointWorld = GridToWorld(StartRoad.Waypoints[0].GetGridCoordinate());
+			FVector LastWaypointWorld = GridToWorld(StartRoad.Waypoints.Last().GetGridCoordinate());
+
+			float DistToFirst = FVector::DistSquared2D(DestWorld, FirstWaypointWorld);
+			float DistToLast = FVector::DistSquared2D(DestWorld, LastWaypointWorld);
+
+			int32 TargetIdx = (DistToFirst < DistToLast) ? 0 : StartRoad.Waypoints.Num() - 1;
+
+			if (StartRoad.bBidirectional || TargetIdx >= StartWaypointIdx)
+			{
+				TArray<FVector> RoadPath = GetRoadSegmentWorldPositions(StartRoadId, StartWaypointIdx, TargetIdx);
+				OutPath.Append(RoadPath);
+			}
+		}
+	}
+
+	OutPath.Add(GridToWorldWithHeight(Destination));
+	return OutPath.Num() > 2;
+}
+
+bool UFarmGridManager::IsOnRoad(const FGridCoordinate& Position, float Tolerance) const
+{
+	float ToleranceSq = Tolerance * Tolerance;
+
+	for (const FMapRoadData& Road : Roads)
+	{
+		for (const FRoadWaypoint& Waypoint : Road.Waypoints)
+		{
+			if (Waypoint.DistanceSquaredTo(Position) <= ToleranceSq)
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
 }

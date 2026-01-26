@@ -160,6 +160,32 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Grid")
 	TArray<FMapScheduleLocation> GetNPCScheduleLocations(const FString& NpcId) const;
 
+	// ---- Road Network ----
+
+	/** Get all roads in the map */
+	UFUNCTION(BlueprintPure, Category = "Grid|Roads")
+	const TArray<FMapRoadData>& GetRoads() const { return Roads; }
+
+	/** Find a road by ID */
+	UFUNCTION(BlueprintPure, Category = "Grid|Roads")
+	bool GetRoad(const FString& RoadId, FMapRoadData& OutRoad) const;
+
+	/** Find the nearest road entry point to a grid position */
+	UFUNCTION(BlueprintCallable, Category = "Grid|Roads")
+	bool FindNearestRoadEntry(const FGridCoordinate& Position, FString& OutRoadId, int32& OutWaypointIndex, float MaxDistance = 1000.0f) const;
+
+	/** Get world positions for a road segment between two waypoint indices */
+	UFUNCTION(BlueprintCallable, Category = "Grid|Roads")
+	TArray<FVector> GetRoadSegmentWorldPositions(const FString& RoadId, int32 StartIndex, int32 EndIndex) const;
+
+	/** Find the best path along roads from start to destination */
+	UFUNCTION(BlueprintCallable, Category = "Grid|Roads")
+	bool FindRoadPath(const FGridCoordinate& Start, const FGridCoordinate& Destination, TArray<FVector>& OutPath) const;
+
+	/** Check if a grid coordinate is on or near any road */
+	UFUNCTION(BlueprintPure, Category = "Grid|Roads")
+	bool IsOnRoad(const FGridCoordinate& Position, float Tolerance = 2.0f) const;
+
 	// ---- Spawner Data ----
 
 	UFUNCTION(BlueprintPure, Category = "Grid")
@@ -206,6 +232,10 @@ protected:
 	/** NPC path/schedule data */
 	UPROPERTY()
 	TArray<FMapPathData> Paths;
+
+	/** Road network data */
+	UPROPERTY()
+	TArray<FMapRoadData> Roads;
 
 	/** Resource spawner data */
 	UPROPERTY()

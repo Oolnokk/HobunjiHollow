@@ -142,6 +142,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Schedule")
 	float ScheduleCheckInterval = 1.0f;
 
+	/** Whether to use roads for navigation when available */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Schedule|Roads")
+	bool bUseRoads = true;
+
+	/** Maximum distance (in grid units) to search for a road entry point */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Schedule|Roads")
+	float RoadSearchDistance = 10.0f;
+
 	// ---- Schedule Data ----
 
 	/** Available patrol routes */
@@ -181,6 +189,14 @@ public:
 	/** Time spent waiting at current waypoint */
 	UPROPERTY(BlueprintReadOnly, Category = "NPC Schedule|State")
 	float WaitTimer = 0.0f;
+
+	/** Whether NPC is currently following a road path */
+	UPROPERTY(BlueprintReadOnly, Category = "NPC Schedule|State")
+	bool bIsFollowingRoad = false;
+
+	/** Current index in the road path */
+	UPROPERTY(BlueprintReadOnly, Category = "NPC Schedule|State")
+	int32 CurrentRoadPathIndex = 0;
 
 	// ---- Functions ----
 
@@ -259,6 +275,13 @@ protected:
 	EGridDirection CurrentTargetFacing;
 	float CurrentArrivalTolerance = 50.0f;
 
+	/** Path of world positions when following roads */
+	TArray<FVector> CurrentRoadPath;
+
+	/** Final destination (after road navigation) */
+	FVector FinalDestination;
+	EGridDirection FinalFacing;
+
 	/** Find best schedule entry for current time */
 	int32 FindActiveScheduleEntry() const;
 
@@ -282,4 +305,10 @@ protected:
 
 	/** Calculate world positions for a patrol route */
 	void CalculateRouteWorldPositions(FPatrolRoute& Route);
+
+	/** Try to find a road path to the destination, returns true if road path was set up */
+	bool TryUseRoadNavigation(const FVector& Destination, EGridDirection TargetFacing);
+
+	/** Advance to the next point in the current road path */
+	void AdvanceRoadPath();
 };

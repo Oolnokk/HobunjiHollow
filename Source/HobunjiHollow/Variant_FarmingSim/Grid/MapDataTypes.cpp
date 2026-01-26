@@ -151,3 +151,104 @@ TArray<FMapScheduleLocation> FMapData::GetNPCScheduleLocations(const FString& Np
 
 	return Result;
 }
+
+// ---- FMapRoadData ----
+
+int32 FMapRoadData::FindNearestWaypointIndex(const FGridCoordinate& Position) const
+{
+	if (Waypoints.Num() == 0)
+	{
+		return -1;
+	}
+
+	int32 NearestIndex = 0;
+	float NearestDistSq = Waypoints[0].DistanceSquaredTo(Position);
+
+	for (int32 i = 1; i < Waypoints.Num(); ++i)
+	{
+		float DistSq = Waypoints[i].DistanceSquaredTo(Position);
+		if (DistSq < NearestDistSq)
+		{
+			NearestDistSq = DistSq;
+			NearestIndex = i;
+		}
+	}
+
+	return NearestIndex;
+}
+
+int32 FMapRoadData::FindWaypointByName(const FString& WaypointName) const
+{
+	for (int32 i = 0; i < Waypoints.Num(); ++i)
+	{
+		if (Waypoints[i].Name == WaypointName)
+		{
+			return i;
+		}
+	}
+	return -1;
+}
+
+float FMapRoadData::GetTotalLength() const
+{
+	float TotalLength = 0.0f;
+
+	for (int32 i = 1; i < Waypoints.Num(); ++i)
+	{
+		float DX = static_cast<float>(Waypoints[i].X - Waypoints[i - 1].X);
+		float DY = static_cast<float>(Waypoints[i].Y - Waypoints[i - 1].Y);
+		TotalLength += FMath::Sqrt(DX * DX + DY * DY);
+	}
+
+	return TotalLength;
+}
+
+// ---- FMapData Road Methods ----
+
+const FMapRoadData* FMapData::FindRoad(const FString& RoadId) const
+{
+	for (const FMapRoadData& Road : Roads)
+	{
+		if (Road.Id == RoadId)
+		{
+			return &Road;
+		}
+	}
+	return nullptr;
+}
+
+bool FMapData::FindNearestRoadEntry(const FGridCoordinate& Position, FString& OutRoadId, int32& OutWaypointIndex) const
+{
+	if (Roads.Num() == 0)
+	{
+		return false;
+	}
+
+	float BestDistSq = TNumericLimits<float>::Max();
+	const FMapRoadData* BestRoad = nullptr;
+	int32 BestWaypointIndex = -1;
+
+	for (const FMapRoadData& Road : Roads)
+	{
+		int32 NearestIdx = Road.FindNearestWaypointIndex(Position);
+		if (NearestIdx >= 0)
+		{
+			float DistSq = Road.Waypoints[NearestIdx].DistanceSquaredTo(Position);
+			if (DistSq < BestDistSq)
+			{
+				BestDistSq = DistSq;
+				BestRoad = &Road;
+				BestWaypointIndex = NearestIdx;
+			}
+		}
+	}
+
+	if (BestRoad)
+	{
+		OutRoadId = BestRoad->Id;
+		OutWaypointIndex = BestWaypointIndex;
+		return true;
+	}
+
+	return false;
+}
