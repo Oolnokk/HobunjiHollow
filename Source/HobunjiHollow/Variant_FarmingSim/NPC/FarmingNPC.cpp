@@ -303,7 +303,7 @@ int32 AFarmingNPC::FindBestScheduleEntry(float CurrentTime, int32 CurrentDay, in
 
 	for (int32 i = 0; i < Schedule.Num(); i++)
 	{
-		const FNPCScheduleEntry& Entry = Schedule[i];
+		const FNPCDailySchedule& Entry = Schedule[i];
 
 		// Check if this entry is valid for current time
 		if (Entry.TimeOfDay > CurrentTime)
@@ -346,7 +346,7 @@ int32 AFarmingNPC::FindBestScheduleEntry(float CurrentTime, int32 CurrentDay, in
 	return BestIndex;
 }
 
-void AFarmingNPC::MoveToScheduledLocation_Implementation(const FNPCScheduleEntry& ScheduleEntry)
+void AFarmingNPC::MoveToScheduledLocation_Implementation(const FNPCDailySchedule& ScheduleEntry)
 {
 	// Default implementation - can be overridden in Blueprint
 	if (!ScheduleEntry.WorldPosition.IsZero())

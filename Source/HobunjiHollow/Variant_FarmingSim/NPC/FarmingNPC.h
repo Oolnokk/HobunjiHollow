@@ -13,9 +13,10 @@ struct FNPCRelationshipSave;
 
 /**
  * Schedule entry defining where an NPC should be at a specific time
+ * Note: This is the legacy schedule system. For grid-based patrolling, use NPCScheduleComponent.
  */
 USTRUCT(BlueprintType)
-struct FNPCScheduleEntry
+struct FNPCDailySchedule
 {
 	GENERATED_BODY()
 
@@ -71,7 +72,7 @@ public:
 
 	/** NPC's daily schedule */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Schedule")
-	TArray<FNPCScheduleEntry> Schedule;
+	TArray<FNPCDailySchedule> Schedule;
 
 	/** Current schedule entry being followed */
 	UPROPERTY(BlueprintReadOnly, Category = "NPC|Schedule")
@@ -130,7 +131,7 @@ protected:
 
 	/** Move to scheduled location */
 	UFUNCTION(BlueprintNativeEvent, Category = "NPC|Schedule")
-	void MoveToScheduledLocation(const FNPCScheduleEntry& ScheduleEntry);
+	void MoveToScheduledLocation(const FNPCDailySchedule& ScheduleEntry);
 
 	/** Currently highlighted for interaction */
 	bool bIsHighlighted = false;
