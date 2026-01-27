@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/SaveGame.h"
+#include "NPC/NPCRelationshipTypes.h"
 #include "FarmingWorldSaveGame.generated.h"
 
 /**
@@ -24,29 +25,9 @@ struct FInventoryItemSave
 	int32 SlotIndex = -1;
 };
 
-/**
- * NPC relationship data
- */
-USTRUCT(BlueprintType)
-struct FNPCRelationshipSave
-{
-	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save")
-	FName NPCID;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save")
-	int32 FriendshipPoints = 0;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save")
-	int32 RomanceLevel = 0;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save")
-	TArray<FName> CompletedDialogues;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save")
-	TArray<FName> UnlockedEvents;
-};
+// Use shared FNPCRelationship struct from NPCRelationshipTypes.h
+// Legacy typedef for backwards compatibility
+typedef FNPCRelationship FNPCRelationshipSave;
 
 /**
  * Story choice tracking

@@ -20,7 +20,9 @@ public class HobunjiHollow : ModuleRules
 			"GameplayStateTreeModule",
 			"Niagara",
 			"UMG",
-			"Slate"
+			"Slate",
+			"Json",
+			"JsonUtilities"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { "SlateCore" });
@@ -40,7 +42,8 @@ public class HobunjiHollow : ModuleRules
 			"HobunjiHollow/Variant_FarmingSim/Interaction",
 			"HobunjiHollow/Variant_FarmingSim/NPC",
 			"HobunjiHollow/Variant_FarmingSim/Dialogue",
-			"HobunjiHollow/Variant_FarmingSim/UI"
+			"HobunjiHollow/Variant_FarmingSim/UI",
+			"HobunjiHollow/Variant_FarmingSim/Grid"
 		});
 
 		// Uncomment if you are using online features

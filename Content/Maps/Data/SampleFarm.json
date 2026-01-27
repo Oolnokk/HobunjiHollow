@@ -1,0 +1,160 @@
+{
+  "formatVersion": "1.0",
+  "mapId": "sample_farm",
+  "displayName": "Sample Farm",
+  "metadata": {
+    "author": "Level Designer",
+    "created": "2026-01-26",
+    "description": "A sample farm map for testing the grid import system"
+  },
+  "grid": {
+    "width": 32,
+    "height": 32,
+    "cellSize": 100,
+    "originOffset": { "x": 0, "y": 0 }
+  },
+  "defaultTerrain": "default",
+  "layers": {
+    "terrain": [
+      { "x": 10, "y": 10, "type": "tillable" },
+      { "x": 11, "y": 10, "type": "tillable" },
+      { "x": 12, "y": 10, "type": "tillable" },
+      { "x": 10, "y": 11, "type": "tillable" },
+      { "x": 11, "y": 11, "type": "tillable" },
+      { "x": 12, "y": 11, "type": "tillable" },
+      { "x": 10, "y": 12, "type": "tillable" },
+      { "x": 11, "y": 12, "type": "tillable" },
+      { "x": 12, "y": 12, "type": "tillable" },
+      { "x": 25, "y": 15, "type": "water" },
+      { "x": 26, "y": 15, "type": "water" },
+      { "x": 25, "y": 16, "type": "water" },
+      { "x": 26, "y": 16, "type": "water" }
+    ],
+    "objects": [
+      {
+        "id": "farmhouse_door",
+        "type": "doorway",
+        "objectClass": "doorway",
+        "x": 16,
+        "y": 25,
+        "properties": {
+          "targetMap": "farmhouse_interior",
+          "targetSpawn": "front_door"
+        }
+      },
+      {
+        "id": "shipping_bin_01",
+        "type": "object",
+        "objectClass": "shipping_bin",
+        "x": 18,
+        "y": 24,
+        "width": 2,
+        "height": 1
+      }
+    ],
+    "zones": [
+      {
+        "id": "playable_area",
+        "type": "bounds",
+        "shape": "rect",
+        "x": 2,
+        "y": 2,
+        "width": 28,
+        "height": 28
+      },
+      {
+        "id": "pond_zone",
+        "type": "fishing",
+        "shape": "rect",
+        "x": 24,
+        "y": 14,
+        "width": 4,
+        "height": 4,
+        "properties": {
+          "fishTable": "farm_pond"
+        }
+      }
+    ],
+    "spawners": [
+      {
+        "id": "oak_01",
+        "type": "tree",
+        "treeType": "oak",
+        "x": 5,
+        "y": 5,
+        "properties": {
+          "regenerates": "true",
+          "respawnDays": "7"
+        }
+      },
+      {
+        "id": "oak_02",
+        "type": "tree",
+        "treeType": "oak",
+        "x": 7,
+        "y": 6,
+        "properties": {
+          "regenerates": "true",
+          "respawnDays": "7"
+        }
+      },
+      {
+        "id": "stone_01",
+        "type": "resource_node",
+        "resourceType": "stone",
+        "x": 20,
+        "y": 8,
+        "properties": {
+          "regenerates": "true",
+          "respawnDays": "3"
+        }
+      }
+    ],
+    "paths": [
+      {
+        "id": "robin_schedule",
+        "type": "schedule_points",
+        "npcId": "robin",
+        "locations": [
+          {
+            "name": "farm_visit_spot",
+            "x": 15,
+            "y": 20,
+            "facing": "south",
+            "activities": ["visiting", "talking"]
+          }
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "id": "to_town",
+        "type": "map_exit",
+        "x": 31,
+        "y": 15,
+        "width": 1,
+        "height": 3,
+        "facing": "east",
+        "targetMap": "town_square",
+        "targetSpawn": "from_farm"
+      },
+      {
+        "id": "from_town",
+        "type": "spawn_point",
+        "x": 30,
+        "y": 16,
+        "facing": "west"
+      },
+      {
+        "id": "default_spawn",
+        "type": "spawn_point",
+        "x": 16,
+        "y": 22,
+        "facing": "south",
+        "properties": {
+          "isDefault": "true"
+        }
+      }
+    ]
+  }
+}

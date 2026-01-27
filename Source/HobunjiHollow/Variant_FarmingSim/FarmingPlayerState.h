@@ -4,9 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerState.h"
+#include "NPC/NPCRelationshipTypes.h"
 #include "FarmingPlayerState.generated.h"
-
-struct FNPCRelationshipSave;
 
 /**
  * Player role in the multiplayer session
@@ -19,29 +18,9 @@ enum class EFarmingPlayerRole : uint8
 	Visitor		UMETA(DisplayName = "Visitor")
 };
 
-/**
- * Per-player NPC relationship data (replicated)
- */
-USTRUCT(BlueprintType)
-struct FPlayerNPCRelationship
-{
-	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC")
-	FName NPCID;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC")
-	int32 FriendshipPoints = 0;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC")
-	int32 RomanceLevel = 0;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC")
-	TArray<FName> CompletedDialogues;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC")
-	TArray<FName> UnlockedEvents;
-};
+// Use shared FNPCRelationship struct from NPCRelationshipTypes.h
+// Legacy typedef for backwards compatibility
+typedef FNPCRelationship FPlayerNPCRelationship;
 
 /**
  * Player state for farming simulation
