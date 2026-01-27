@@ -186,6 +186,24 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Grid|Roads")
 	bool IsOnRoad(const FGridCoordinate& Position, float Tolerance = 2.0f) const;
 
+	// ---- Debug Visualization ----
+
+	/** Draw debug visualization of all roads */
+	UFUNCTION(BlueprintCallable, Category = "Grid|Debug")
+	void DrawDebugRoads(float Duration = 5.0f, float Thickness = 5.0f) const;
+
+	/** Draw debug visualization of a specific road */
+	UFUNCTION(BlueprintCallable, Category = "Grid|Debug")
+	void DrawDebugRoad(const FString& RoadId, FLinearColor Color, float Duration = 5.0f, float Thickness = 5.0f) const;
+
+	/** Draw debug grid lines */
+	UFUNCTION(BlueprintCallable, Category = "Grid|Debug")
+	void DrawDebugGrid(int32 CenterX, int32 CenterY, int32 Radius = 10, float Duration = 5.0f) const;
+
+	/** Draw debug zone boundaries */
+	UFUNCTION(BlueprintCallable, Category = "Grid|Debug")
+	void DrawDebugZones(float Duration = 5.0f) const;
+
 	// ---- Spawner Data ----
 
 	UFUNCTION(BlueprintPure, Category = "Grid")

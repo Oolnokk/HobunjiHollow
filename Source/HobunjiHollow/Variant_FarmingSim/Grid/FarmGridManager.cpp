@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "FarmGridManager.h"
+#include "DrawDebugHelpers.h"
 
 void UFarmGridManager::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -679,4 +680,244 @@ bool UFarmGridManager::IsOnRoad(const FGridCoordinate& Position, float Tolerance
 	}
 
 	return false;
+}
+
+// ---- Debug Visualization ----
+
+void UFarmGridManager::DrawDebugRoads(float Duration, float Thickness) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	// Color palette for different roads
+	TArray<FColor> RoadColors = {
+		FColor::Yellow,
+		FColor::Cyan,
+		FColor::Magenta,
+		FColor::Orange,
+		FColor::Green,
+		FColor::Blue
+	};
+
+	int32 ColorIndex = 0;
+	for (const FMapRoadData& Road : Roads)
+	{
+		FColor RoadColor = RoadColors[ColorIndex % RoadColors.Num()];
+		ColorIndex++;
+
+		// Draw road segments
+		for (int32 i = 0; i < Road.Waypoints.Num() - 1; ++i)
+		{
+			FVector Start = GridToWorldWithHeight(Road.Waypoints[i].GetGridCoordinate());
+			FVector End = GridToWorldWithHeight(Road.Waypoints[i + 1].GetGridCoordinate());
+
+			// Raise slightly above ground for visibility
+			Start.Z += 10.0f;
+			End.Z += 10.0f;
+
+			DrawDebugLine(World, Start, End, RoadColor, false, Duration, 0, Thickness);
+
+			// Draw arrows for direction if one-way
+			if (!Road.bBidirectional)
+			{
+				FVector Mid = (Start + End) * 0.5f;
+				FVector Dir = (End - Start).GetSafeNormal();
+				FVector Right = FVector::CrossProduct(Dir, FVector::UpVector) * 30.0f;
+
+				DrawDebugLine(World, Mid, Mid - Dir * 40.0f + Right, RoadColor, false, Duration, 0, Thickness * 0.5f);
+				DrawDebugLine(World, Mid, Mid - Dir * 40.0f - Right, RoadColor, false, Duration, 0, Thickness * 0.5f);
+			}
+		}
+
+		// Draw waypoint spheres with names
+		for (int32 i = 0; i < Road.Waypoints.Num(); ++i)
+		{
+			const FRoadWaypoint& Waypoint = Road.Waypoints[i];
+			FVector Pos = GridToWorldWithHeight(Waypoint.GetGridCoordinate());
+			Pos.Z += 10.0f;
+
+			// Larger sphere at endpoints
+			float Radius = (i == 0 || i == Road.Waypoints.Num() - 1) ? 30.0f : 15.0f;
+			DrawDebugSphere(World, Pos, Radius, 8, RoadColor, false, Duration, 0, Thickness * 0.5f);
+
+			// Draw waypoint name if present
+			if (!Waypoint.Name.IsEmpty())
+			{
+				DrawDebugString(World, Pos + FVector(0, 0, 50), Waypoint.Name, nullptr, RoadColor, Duration, true);
+			}
+		}
+
+		// Draw road ID
+		if (Road.Waypoints.Num() > 0)
+		{
+			FVector LabelPos = GridToWorldWithHeight(Road.Waypoints[0].GetGridCoordinate());
+			LabelPos.Z += 80.0f;
+			DrawDebugString(World, LabelPos, FString::Printf(TEXT("[%s]"), *Road.Id), nullptr, RoadColor, Duration, true);
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("DrawDebugRoads: Drew %d roads"), Roads.Num());
+}
+
+void UFarmGridManager::DrawDebugRoad(const FString& RoadId, FLinearColor Color, float Duration, float Thickness) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	FMapRoadData Road;
+	if (!GetRoad(RoadId, Road))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("DrawDebugRoad: Road '%s' not found"), *RoadId);
+		return;
+	}
+
+	FColor DrawColor = Color.ToFColor(true);
+
+	// Draw road segments
+	for (int32 i = 0; i < Road.Waypoints.Num() - 1; ++i)
+	{
+		FVector Start = GridToWorldWithHeight(Road.Waypoints[i].GetGridCoordinate());
+		FVector End = GridToWorldWithHeight(Road.Waypoints[i + 1].GetGridCoordinate());
+
+		Start.Z += 10.0f;
+		End.Z += 10.0f;
+
+		DrawDebugLine(World, Start, End, DrawColor, false, Duration, 0, Thickness);
+	}
+
+	// Draw waypoints
+	for (const FRoadWaypoint& Waypoint : Road.Waypoints)
+	{
+		FVector Pos = GridToWorldWithHeight(Waypoint.GetGridCoordinate());
+		Pos.Z += 10.0f;
+		DrawDebugSphere(World, Pos, 20.0f, 8, DrawColor, false, Duration, 0, Thickness * 0.5f);
+	}
+}
+
+void UFarmGridManager::DrawDebugGrid(int32 CenterX, int32 CenterY, int32 Radius, float Duration) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	FColor GridColor = FColor(100, 100, 100, 255);
+	FColor CenterColor = FColor::White;
+
+	for (int32 X = CenterX - Radius; X <= CenterX + Radius; ++X)
+	{
+		for (int32 Y = CenterY - Radius; Y <= CenterY + Radius; ++Y)
+		{
+			FGridCoordinate Coord(X, Y);
+			if (!IsValidCoordinate(Coord))
+			{
+				continue;
+			}
+
+			FVector WorldPos = GridToWorldWithHeight(Coord);
+			WorldPos.Z += 5.0f;
+
+			float HalfSize = GridConfig.CellSize * 0.5f;
+
+			// Draw cell outline
+			FColor CellColor = (X == CenterX && Y == CenterY) ? CenterColor : GridColor;
+
+			FVector Corners[4] = {
+				WorldPos + FVector(-HalfSize, -HalfSize, 0),
+				WorldPos + FVector(HalfSize, -HalfSize, 0),
+				WorldPos + FVector(HalfSize, HalfSize, 0),
+				WorldPos + FVector(-HalfSize, HalfSize, 0)
+			};
+
+			for (int32 i = 0; i < 4; ++i)
+			{
+				DrawDebugLine(World, Corners[i], Corners[(i + 1) % 4], CellColor, false, Duration, 0, 1.0f);
+			}
+
+			// Color based on terrain type
+			ETerrainType Terrain = GetTerrainType(Coord);
+			FColor TerrainColor;
+			switch (Terrain)
+			{
+			case ETerrainType::Tillable: TerrainColor = FColor(139, 69, 19); break; // Brown
+			case ETerrainType::Water: TerrainColor = FColor::Blue; break;
+			case ETerrainType::Blocked: TerrainColor = FColor::Red; break;
+			case ETerrainType::Path: TerrainColor = FColor(200, 180, 150); break; // Tan
+			default: TerrainColor = FColor::Green; break;
+			}
+
+			DrawDebugPoint(World, WorldPos, 8.0f, TerrainColor, false, Duration);
+		}
+	}
+}
+
+void UFarmGridManager::DrawDebugZones(float Duration) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	for (const FMapZoneData& Zone : Zones)
+	{
+		FColor ZoneColor;
+		switch (Zone.GetZoneType())
+		{
+		case EZoneType::Bounds: ZoneColor = FColor::Green; break;
+		case EZoneType::Indoor: ZoneColor = FColor::Cyan; break;
+		case EZoneType::Fishing: ZoneColor = FColor::Blue; break;
+		case EZoneType::Forage: ZoneColor = FColor::Yellow; break;
+		case EZoneType::Restricted: ZoneColor = FColor::Red; break;
+		case EZoneType::Trigger: ZoneColor = FColor::Magenta; break;
+		default: ZoneColor = FColor::White; break;
+		}
+
+		if (Zone.Shape == TEXT("rect"))
+		{
+			// Draw rectangle zone
+			FVector Corner1 = GridToWorldWithHeight(FGridCoordinate(Zone.X, Zone.Y));
+			FVector Corner2 = GridToWorldWithHeight(FGridCoordinate(Zone.X + Zone.Width, Zone.Y));
+			FVector Corner3 = GridToWorldWithHeight(FGridCoordinate(Zone.X + Zone.Width, Zone.Y + Zone.Height));
+			FVector Corner4 = GridToWorldWithHeight(FGridCoordinate(Zone.X, Zone.Y + Zone.Height));
+
+			// Raise for visibility
+			Corner1.Z += 20.0f;
+			Corner2.Z += 20.0f;
+			Corner3.Z += 20.0f;
+			Corner4.Z += 20.0f;
+
+			DrawDebugLine(World, Corner1, Corner2, ZoneColor, false, Duration, 0, 3.0f);
+			DrawDebugLine(World, Corner2, Corner3, ZoneColor, false, Duration, 0, 3.0f);
+			DrawDebugLine(World, Corner3, Corner4, ZoneColor, false, Duration, 0, 3.0f);
+			DrawDebugLine(World, Corner4, Corner1, ZoneColor, false, Duration, 0, 3.0f);
+
+			// Label
+			FVector LabelPos = (Corner1 + Corner3) * 0.5f + FVector(0, 0, 50);
+			DrawDebugString(World, LabelPos, FString::Printf(TEXT("%s (%s)"), *Zone.Id, *Zone.Type), nullptr, ZoneColor, Duration, true);
+		}
+		else if (Zone.Shape == TEXT("polygon") && Zone.Points.Num() >= 3)
+		{
+			// Draw polygon zone
+			for (int32 i = 0; i < Zone.Points.Num(); ++i)
+			{
+				FVector Start = GridToWorldWithHeight(FGridCoordinate(Zone.Points[i].X, Zone.Points[i].Y));
+				FVector End = GridToWorldWithHeight(FGridCoordinate(Zone.Points[(i + 1) % Zone.Points.Num()].X, Zone.Points[(i + 1) % Zone.Points.Num()].Y));
+
+				Start.Z += 20.0f;
+				End.Z += 20.0f;
+
+				DrawDebugLine(World, Start, End, ZoneColor, false, Duration, 0, 3.0f);
+			}
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("DrawDebugZones: Drew %d zones"), Zones.Num());
 }
