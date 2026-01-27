@@ -74,10 +74,10 @@ struct FNPCBirthday
 };
 
 /**
- * Gift response - what happens when you give this NPC a gift
+ * Gift preference entry - what happens when you give this NPC a gift
  */
 USTRUCT(BlueprintType)
-struct FGiftResponse
+struct FNPCGiftPreference
 {
 	GENERATED_BODY()
 
@@ -444,7 +444,7 @@ public:
 
 	/** Gift preferences */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gifts")
-	TArray<FGiftResponse> GiftPreferences;
+	TArray<FNPCGiftPreference> GiftPreferences;
 
 	/** Universal loved items (overrides neutral) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gifts")

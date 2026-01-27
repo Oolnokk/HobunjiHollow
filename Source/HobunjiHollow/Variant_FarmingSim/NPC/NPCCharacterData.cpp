@@ -5,7 +5,7 @@
 EGiftPreference UNPCCharacterData::GetGiftPreference(const FString& ItemId) const
 {
 	// Check specific gift responses first
-	for (const FGiftResponse& Response : GiftPreferences)
+	for (const FNPCGiftPreference& Response : GiftPreferences)
 	{
 		if (Response.ItemId == ItemId)
 		{
