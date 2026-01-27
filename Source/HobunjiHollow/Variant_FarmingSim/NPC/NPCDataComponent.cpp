@@ -136,7 +136,7 @@ void UNPCDataComponent::ApplyAppearanceToMesh(USkeletalMeshComponent* MeshCompon
 	}
 
 	// Apply material colors via dynamic material instance
-	// This assumes the material has parameters named: SkinColor, HairColor, EyeColor, AccentColor
+	// Uses generic numbered color parameters - what they color depends on the species
 	if (MeshComponent->GetNumMaterials() > 0)
 	{
 		for (int32 i = 0; i < MeshComponent->GetNumMaterials(); ++i)
@@ -144,10 +144,11 @@ void UNPCDataComponent::ApplyAppearanceToMesh(USkeletalMeshComponent* MeshCompon
 			UMaterialInstanceDynamic* DynMaterial = MeshComponent->CreateAndSetMaterialInstanceDynamic(i);
 			if (DynMaterial)
 			{
-				DynMaterial->SetVectorParameterValue(TEXT("SkinColor"), Appearance.SkinColor);
-				DynMaterial->SetVectorParameterValue(TEXT("HairColor"), Appearance.HairColor);
-				DynMaterial->SetVectorParameterValue(TEXT("EyeColor"), Appearance.EyeColor);
-				DynMaterial->SetVectorParameterValue(TEXT("AccentColor"), Appearance.AccentColor);
+				DynMaterial->SetVectorParameterValue(TEXT("CharacterColor1"), Appearance.CharacterColor1);
+				DynMaterial->SetVectorParameterValue(TEXT("CharacterColor2"), Appearance.CharacterColor2);
+				DynMaterial->SetVectorParameterValue(TEXT("CharacterColor3"), Appearance.CharacterColor3);
+				DynMaterial->SetVectorParameterValue(TEXT("CharacterColor4"), Appearance.CharacterColor4);
+				DynMaterial->SetVectorParameterValue(TEXT("CharacterColor5"), Appearance.CharacterColor5);
 			}
 		}
 	}

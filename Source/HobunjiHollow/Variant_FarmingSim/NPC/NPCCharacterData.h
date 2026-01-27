@@ -223,10 +223,29 @@ struct FNPCScheduleSlot
 	/** Patrol route ID if bIsPatrol is true */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule")
 	FString PatrolRouteId;
+
+	// ---- Spawn/Despawn Behavior ----
+
+	/** If true, NPC spawns at StartTime at this location */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule|Spawn")
+	bool bSpawnAtStart = false;
+
+	/** If true, NPC despawns at EndTime after reaching this location */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule|Spawn")
+	bool bDespawnAtEnd = false;
+
+	/** Door/connection ID to spawn from or despawn into */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule|Spawn")
+	FString DoorId;
+
+	/** If true, NPC is hidden/inactive during this slot (stays inside) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule|Spawn")
+	bool bInactive = false;
 };
 
 /**
  * Appearance customization - matches player character system
+ * Colors are generic and species-agnostic (what they color depends on the species)
  */
 USTRUCT(BlueprintType)
 struct FNPCAppearance
@@ -237,32 +256,40 @@ struct FNPCAppearance
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance")
 	FString SpeciesId;
 
-	/** Skin/fur color */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance")
-	FLinearColor SkinColor = FLinearColor::White;
+	/** Primary character color (fur, skin, scales, feathers - depends on species) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Colors")
+	FLinearColor CharacterColor1 = FLinearColor::White;
 
-	/** Hair/mane color */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance")
-	FLinearColor HairColor = FLinearColor::Black;
+	/** Secondary character color (belly, underbelly, markings - depends on species) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Colors")
+	FLinearColor CharacterColor2 = FLinearColor::White;
 
-	/** Eye color */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance")
-	FLinearColor EyeColor = FLinearColor::Blue;
+	/** Tertiary character color (accents, spots, stripes - depends on species) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Colors")
+	FLinearColor CharacterColor3 = FLinearColor::White;
 
-	/** Secondary/accent color */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance")
-	FLinearColor AccentColor = FLinearColor::White;
+	/** Quaternary character color (eyes, claws, beak, tusks - depends on species) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Colors")
+	FLinearColor CharacterColor4 = FLinearColor::Blue;
 
-	/** Hair style index */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance")
-	int32 HairStyle = 0;
+	/** Quinary character color (extra detail, jewelry tint, glow - depends on species) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Colors")
+	FLinearColor CharacterColor5 = FLinearColor::White;
 
-	/** Face/head variant index */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance")
-	int32 FaceVariant = 0;
+	/** Style variant 1 (hair/mane/crest/horn style - depends on species) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Variants")
+	int32 StyleVariant1 = 0;
+
+	/** Style variant 2 (face/head/beak shape - depends on species) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Variants")
+	int32 StyleVariant2 = 0;
+
+	/** Style variant 3 (tail/wings/ears - depends on species) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Variants")
+	int32 StyleVariant3 = 0;
 
 	/** Body type/build index */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Variants")
 	int32 BodyType = 0;
 
 	/** Height scale (1.0 = normal) */
