@@ -1,0 +1,171 @@
+// Copyright Epic Games, Inc. All Rights Reserved.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/Actor.h"
+#include "GridTypes.h"
+#include "GridPlaceableTree.generated.h"
+
+class UStaticMeshComponent;
+class UCapsuleComponent;
+
+/**
+ * Tree types that can be placed on the grid
+ */
+UENUM(BlueprintType)
+enum class ETreeType : uint8
+{
+	Oak		UMETA(DisplayName = "Oak"),
+	Maple	UMETA(DisplayName = "Maple"),
+	Pine	UMETA(DisplayName = "Pine"),
+	Birch	UMETA(DisplayName = "Birch"),
+	Fruit	UMETA(DisplayName = "Fruit Tree")
+};
+
+/**
+ * Growth stage of the tree
+ */
+UENUM(BlueprintType)
+enum class ETreeGrowthStage : uint8
+{
+	Seed,
+	Sapling,
+	Young,
+	Mature,
+	Stump
+};
+
+/**
+ * A tree that can be placed on the grid, chopped, and regenerates over time.
+ */
+UCLASS(BlueprintType, Blueprintable)
+class HOBUNJIHOLLOW_API AGridPlaceableTree : public AActor
+{
+	GENERATED_BODY()
+
+public:
+	AGridPlaceableTree();
+
+	// ---- Configuration ----
+
+	/** Type of tree */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tree")
+	ETreeType TreeType = ETreeType::Oak;
+
+	/** Current growth stage */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tree", SaveGame)
+	ETreeGrowthStage GrowthStage = ETreeGrowthStage::Mature;
+
+	/** Whether this tree regenerates after being chopped */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tree")
+	bool bRegenerates = true;
+
+	/** Days until the tree respawns after being chopped */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tree", meta = (EditCondition = "bRegenerates", ClampMin = "1"))
+	int32 RespawnDays = 7;
+
+	/** Days remaining until respawn (when in Stump stage) */
+	UPROPERTY(BlueprintReadOnly, Category = "Tree", SaveGame)
+	int32 DaysUntilRespawn = 0;
+
+	/** Grid position this tree occupies */
+	UPROPERTY(BlueprintReadOnly, Category = "Tree", SaveGame)
+	FGridCoordinate GridPosition;
+
+	// ---- Drops Configuration ----
+
+	/** Item ID dropped when chopped (wood) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tree|Drops")
+	FName WoodDropId = FName("wood");
+
+	/** Min wood dropped */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tree|Drops", meta = (ClampMin = "0"))
+	int32 MinWoodDrop = 5;
+
+	/** Max wood dropped */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tree|Drops", meta = (ClampMin = "1"))
+	int32 MaxWoodDrop = 10;
+
+	/** Item ID for seed/sapling drop */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tree|Drops")
+	FName SeedDropId;
+
+	/** Chance to drop a seed (0-1) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tree|Drops", meta = (ClampMin = "0", ClampMax = "1"))
+	float SeedDropChance = 0.25f;
+
+	/** Hardwood drop ID (rare drop from mature trees) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tree|Drops")
+	FName HardwoodDropId = FName("hardwood");
+
+	/** Chance to drop hardwood (0-1) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tree|Drops", meta = (ClampMin = "0", ClampMax = "1"))
+	float HardwoodDropChance = 0.1f;
+
+	// ---- Components ----
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	USceneComponent* RootSceneComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	UStaticMeshComponent* TrunkMesh;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	UStaticMeshComponent* LeavesMesh;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	UStaticMeshComponent* StumpMesh;
+
+	/** Capsule collision for smooth character sliding */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	UCapsuleComponent* CollisionCapsule;
+
+	// ---- Collision Configuration ----
+
+	/** Radius of the collision capsule */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tree|Collision")
+	float CollisionRadius = 30.0f;
+
+	/** Half-height of the collision capsule */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tree|Collision")
+	float CollisionHalfHeight = 100.0f;
+
+	// ---- Interaction ----
+
+	/** Chop the tree (called by player with axe) */
+	UFUNCTION(BlueprintCallable, Category = "Tree")
+	void Chop();
+
+	/** Check if tree can be chopped */
+	UFUNCTION(BlueprintPure, Category = "Tree")
+	bool CanBeChopped() const;
+
+	/** Called when a new day starts */
+	UFUNCTION(BlueprintCallable, Category = "Tree")
+	void OnDayAdvance();
+
+	/** Update visual based on growth stage */
+	UFUNCTION(BlueprintCallable, Category = "Tree")
+	void UpdateVisuals();
+
+	// ---- Events ----
+
+	/** Called when tree is chopped down */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Tree")
+	void OnChopped();
+
+	/** Called when tree finishes regrowing */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Tree")
+	void OnRegrown();
+
+	/** Called to spawn drops - override in BP to customize */
+	UFUNCTION(BlueprintNativeEvent, Category = "Tree")
+	void SpawnDrops();
+
+protected:
+	virtual void BeginPlay() override;
+
+	/** Set growth stage and update visuals */
+	void SetGrowthStage(ETreeGrowthStage NewStage);
+};

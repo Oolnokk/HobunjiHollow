@@ -1,0 +1,75 @@
+{
+  "formatVersion": "1.0",
+  "mapId": "hreesh_map",
+  "displayName": "Hreesh Guard Duty",
+  "metadata": {
+    "author": "Level Designer",
+    "created": "2026-01-26",
+    "description": "Map with guard Hreesh patrolling perimeter during day, resting at night"
+  },
+  "grid": {
+    "width": 32,
+    "height": 32,
+    "cellSize": 100,
+    "originOffset": { "x": 0, "y": 0 }
+  },
+  "defaultTerrain": "default",
+  "layers": {
+    "terrain": [],
+    "objects": [],
+    "zones": [
+      {
+        "id": "playable_area",
+        "type": "bounds",
+        "shape": "rect",
+        "x": 0,
+        "y": 0,
+        "width": 32,
+        "height": 32
+      }
+    ],
+    "spawners": [],
+    "paths": [
+      {
+        "id": "hreesh_patrol_route",
+        "type": "schedule_points",
+        "npcId": "Hreesh",
+        "locations": [
+          { "name": "north_west", "x": 5, "y": 5, "facing": "east", "activities": ["patrolling"], "arrivalTolerance": 50 },
+          { "name": "north_center", "x": 16, "y": 5, "facing": "east", "activities": ["patrolling"], "arrivalTolerance": 50 },
+          { "name": "north_east", "x": 27, "y": 5, "facing": "south", "activities": ["patrolling"], "arrivalTolerance": 50 },
+          { "name": "east_upper", "x": 27, "y": 12, "facing": "south", "activities": ["patrolling"], "arrivalTolerance": 50 },
+          { "name": "east_lower", "x": 27, "y": 20, "facing": "south", "activities": ["patrolling"], "arrivalTolerance": 50 },
+          { "name": "south_east", "x": 27, "y": 27, "facing": "west", "activities": ["patrolling"], "arrivalTolerance": 50 },
+          { "name": "south_center", "x": 16, "y": 27, "facing": "west", "activities": ["patrolling"], "arrivalTolerance": 50 },
+          { "name": "south_west", "x": 5, "y": 27, "facing": "north", "activities": ["patrolling"], "arrivalTolerance": 50 },
+          { "name": "west_lower", "x": 5, "y": 20, "facing": "north", "activities": ["patrolling"], "arrivalTolerance": 50 },
+          { "name": "west_upper", "x": 5, "y": 12, "facing": "north", "activities": ["patrolling"], "arrivalTolerance": 50 }
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "id": "hreesh_home",
+        "type": "spawn_point",
+        "x": 5,
+        "y": 5,
+        "facing": "south",
+        "properties": {
+          "isDefault": "false",
+          "description": "Hreesh's rest spot after 6pm"
+        }
+      },
+      {
+        "id": "default_spawn",
+        "type": "spawn_point",
+        "x": 16,
+        "y": 16,
+        "facing": "south",
+        "properties": {
+          "isDefault": "true"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,137 @@
+{
+  "formatVersion": "1.0",
+  "mapId": "village_roads",
+  "displayName": "Village with Road Network",
+  "metadata": {
+    "author": "Level Designer",
+    "created": "2026-01-26",
+    "description": "A village with roads connecting key locations. NPCs use roads to travel."
+  },
+  "grid": {
+    "width": 48,
+    "height": 48,
+    "cellSize": 100,
+    "originOffset": { "x": 0, "y": 0 }
+  },
+  "defaultTerrain": "grass",
+  "layers": {
+    "terrain": [],
+    "objects": [],
+    "zones": [
+      {
+        "id": "playable_area",
+        "type": "bounds",
+        "shape": "rect",
+        "x": 0,
+        "y": 0,
+        "width": 48,
+        "height": 48
+      }
+    ],
+    "spawners": [],
+    "paths": [
+      {
+        "id": "main_road",
+        "type": "road",
+        "bidirectional": true,
+        "speedMultiplier": 1.2,
+        "waypoints": [
+          { "name": "west_gate", "x": 0, "y": 24 },
+          { "name": "west_junction", "x": 12, "y": 24 },
+          { "name": "town_square", "x": 24, "y": 24 },
+          { "name": "east_junction", "x": 36, "y": 24 },
+          { "name": "east_gate", "x": 48, "y": 24 }
+        ],
+        "connectedRoads": ["north_road", "south_road", "market_lane"]
+      },
+      {
+        "id": "north_road",
+        "type": "road",
+        "bidirectional": true,
+        "waypoints": [
+          { "name": "main_junction_north", "x": 24, "y": 24 },
+          { "name": "north_midpoint", "x": 24, "y": 12 },
+          { "name": "blacksmith", "x": 24, "y": 6 }
+        ],
+        "connectedRoads": ["main_road"]
+      },
+      {
+        "id": "south_road",
+        "type": "road",
+        "bidirectional": true,
+        "waypoints": [
+          { "name": "main_junction_south", "x": 24, "y": 24 },
+          { "name": "south_midpoint", "x": 24, "y": 36 },
+          { "name": "tavern", "x": 24, "y": 42 }
+        ],
+        "connectedRoads": ["main_road"]
+      },
+      {
+        "id": "market_lane",
+        "type": "road",
+        "bidirectional": true,
+        "waypoints": [
+          { "name": "west_junction_market", "x": 12, "y": 24 },
+          { "name": "market_entrance", "x": 12, "y": 16 },
+          { "name": "market_stalls", "x": 8, "y": 12 }
+        ],
+        "connectedRoads": ["main_road"]
+      },
+      {
+        "id": "guard_patrol",
+        "type": "schedule_points",
+        "npcId": "Guard",
+        "locations": [
+          { "name": "west_gate_post", "x": 2, "y": 24, "facing": "west", "activities": ["patrolling"], "arrivalTolerance": 50 },
+          { "name": "town_square_patrol", "x": 24, "y": 24, "facing": "east", "activities": ["patrolling"], "arrivalTolerance": 50 },
+          { "name": "east_gate_post", "x": 46, "y": 24, "facing": "east", "activities": ["patrolling"], "arrivalTolerance": 50 }
+        ]
+      },
+      {
+        "id": "merchant_schedule",
+        "type": "schedule_points",
+        "npcId": "Merchant",
+        "locations": [
+          { "name": "home", "x": 30, "y": 30, "facing": "south", "activities": ["sleeping", "resting"], "arrivalTolerance": 50 },
+          { "name": "market_stall", "x": 8, "y": 12, "facing": "south", "activities": ["selling", "working"], "arrivalTolerance": 50 },
+          { "name": "tavern_seat", "x": 24, "y": 42, "facing": "north", "activities": ["eating", "drinking"], "arrivalTolerance": 50 }
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "id": "default_spawn",
+        "type": "spawn_point",
+        "x": 24,
+        "y": 24,
+        "facing": "south",
+        "properties": {
+          "isDefault": "true",
+          "description": "Town square spawn"
+        }
+      },
+      {
+        "id": "west_entrance",
+        "type": "spawn_point",
+        "x": 2,
+        "y": 24,
+        "facing": "east",
+        "properties": {
+          "isDefault": "false",
+          "description": "West gate entrance"
+        }
+      },
+      {
+        "id": "east_entrance",
+        "type": "spawn_point",
+        "x": 46,
+        "y": 24,
+        "facing": "west",
+        "properties": {
+          "isDefault": "false",
+          "description": "East gate entrance"
+        }
+      }
+    ]
+  }
+}

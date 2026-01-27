@@ -1,0 +1,157 @@
+{
+  "formatVersion": "1.0",
+  "mapId": "tree_example",
+  "displayName": "Tree Placement Example",
+  "metadata": {
+    "author": "Example",
+    "created": "2026-01-26",
+    "description": "Demonstrates how to place different tree types via JSON"
+  },
+  "grid": {
+    "width": 20,
+    "height": 20,
+    "cellSize": 100,
+    "originOffset": { "x": 0, "y": 0 }
+  },
+  "defaultTerrain": "default",
+  "layers": {
+    "terrain": [],
+    "objects": [],
+    "zones": [
+      {
+        "id": "playable_area",
+        "type": "bounds",
+        "shape": "rect",
+        "x": 0,
+        "y": 0,
+        "width": 20,
+        "height": 20
+      }
+    ],
+    "spawners": [
+      {
+        "id": "oak_tree_1",
+        "type": "tree",
+        "treeType": "oak",
+        "x": 3,
+        "y": 5,
+        "properties": {
+          "regenerates": "true",
+          "respawnDays": "7"
+        }
+      },
+      {
+        "id": "oak_tree_2",
+        "type": "tree",
+        "treeType": "oak",
+        "x": 5,
+        "y": 4,
+        "properties": {
+          "regenerates": "true",
+          "respawnDays": "7"
+        }
+      },
+      {
+        "id": "oak_tree_3",
+        "type": "tree",
+        "treeType": "oak",
+        "x": 4,
+        "y": 7,
+        "properties": {
+          "regenerates": "true",
+          "respawnDays": "7"
+        }
+      },
+      {
+        "id": "maple_tree_1",
+        "type": "tree",
+        "treeType": "maple",
+        "x": 10,
+        "y": 3,
+        "properties": {
+          "regenerates": "true",
+          "respawnDays": "10"
+        }
+      },
+      {
+        "id": "maple_tree_2",
+        "type": "tree",
+        "treeType": "maple",
+        "x": 12,
+        "y": 5,
+        "properties": {
+          "regenerates": "true",
+          "respawnDays": "10"
+        }
+      },
+      {
+        "id": "pine_tree_1",
+        "type": "tree",
+        "treeType": "pine",
+        "x": 15,
+        "y": 8,
+        "properties": {
+          "regenerates": "true",
+          "respawnDays": "5"
+        }
+      },
+      {
+        "id": "pine_tree_2",
+        "type": "tree",
+        "treeType": "pine",
+        "x": 17,
+        "y": 7,
+        "properties": {
+          "regenerates": "true",
+          "respawnDays": "5"
+        }
+      },
+      {
+        "id": "pine_tree_3",
+        "type": "tree",
+        "treeType": "pine",
+        "x": 16,
+        "y": 10,
+        "properties": {
+          "regenerates": "true",
+          "respawnDays": "5"
+        }
+      },
+      {
+        "id": "fruit_tree_apple",
+        "type": "tree",
+        "treeType": "fruit",
+        "x": 8,
+        "y": 15,
+        "properties": {
+          "regenerates": "true",
+          "respawnDays": "14",
+          "fruitType": "apple"
+        }
+      },
+      {
+        "id": "permanent_oak",
+        "type": "tree",
+        "treeType": "oak",
+        "x": 2,
+        "y": 18,
+        "properties": {
+          "regenerates": "false"
+        }
+      }
+    ],
+    "paths": [],
+    "connections": [
+      {
+        "id": "default_spawn",
+        "type": "spawn_point",
+        "x": 10,
+        "y": 10,
+        "facing": "south",
+        "properties": {
+          "isDefault": "true"
+        }
+      }
+    ]
+  }
+}
