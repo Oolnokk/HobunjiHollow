@@ -1,6 +1,9 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "FarmingNPC.h"
+#include "NPCDataComponent.h"
+#include "NPCScheduleComponent.h"
+#include "NPCCharacterData.h"
 #include "Save/FarmingWorldSaveGame.h"
 #include "FarmingGameMode.h"
 #include "FarmingPlayerState.h"
@@ -13,7 +16,6 @@ AFarmingNPC::AFarmingNPC()
 
 	NPCID = NAME_None;
 	DisplayName = FText::FromString(TEXT("NPC"));
-	CurrentScheduleIndex = -1;
 	PointsPerHeartLevel = 250;
 	bIsHighlighted = false;
 }
@@ -253,17 +255,6 @@ void AFarmingNPC::MarkDialogueSeen(AActor* ForPlayer, FName DialogueID)
 	}
 }
 
-void AFarmingNPC::UpdateSchedule(float CurrentTime, int32 CurrentDay, int32 CurrentSeason)
-{
-	int32 BestIndex = FindBestScheduleEntry(CurrentTime, CurrentDay, CurrentSeason);
-
-	if (BestIndex != CurrentScheduleIndex && BestIndex != -1)
-	{
-		CurrentScheduleIndex = BestIndex;
-		MoveToScheduledLocation(Schedule[BestIndex]);
-	}
-}
-
 bool AFarmingNPC::CanPlayerRomance(AActor* ForPlayer) const
 {
 	if (!ForPlayer)
@@ -296,64 +287,14 @@ bool AFarmingNPC::CanPlayerRomance(AActor* ForPlayer) const
 	return FarmingPS->CanRomance();
 }
 
-int32 AFarmingNPC::FindBestScheduleEntry(float CurrentTime, int32 CurrentDay, int32 CurrentSeason) const
+UNPCDataComponent* AFarmingNPC::GetDataComponent() const
 {
-	int32 BestIndex = -1;
-	int32 BestScore = -1;
-
-	for (int32 i = 0; i < Schedule.Num(); i++)
-	{
-		const FNPCDailySchedule& Entry = Schedule[i];
-
-		// Check if this entry is valid for current time
-		if (Entry.TimeOfDay > CurrentTime)
-		{
-			continue; // Too early for this entry
-		}
-
-		int32 Score = 0;
-
-		// Match day of week
-		if (Entry.DayOfWeek == -1 || Entry.DayOfWeek == (CurrentDay % 7))
-		{
-			Score += 100;
-		}
-		else
-		{
-			continue; // Wrong day
-		}
-
-		// Match season
-		if (Entry.Season == -1 || Entry.Season == CurrentSeason)
-		{
-			Score += 100;
-		}
-		else
-		{
-			continue; // Wrong season
-		}
-
-		// Prefer entries closer to current time
-		Score += (int32)(100.0f - FMath::Abs(CurrentTime - Entry.TimeOfDay));
-
-		if (Score > BestScore)
-		{
-			BestScore = Score;
-			BestIndex = i;
-		}
-	}
-
-	return BestIndex;
+	return FindComponentByClass<UNPCDataComponent>();
 }
 
-void AFarmingNPC::MoveToScheduledLocation_Implementation(const FNPCDailySchedule& ScheduleEntry)
+UNPCScheduleComponent* AFarmingNPC::GetScheduleComponent() const
 {
-	// Default implementation - can be overridden in Blueprint
-	if (!ScheduleEntry.WorldPosition.IsZero())
-	{
-		SetActorLocation(ScheduleEntry.WorldPosition);
-		UE_LOG(LogTemp, Log, TEXT("%s moving to: %s"), *DisplayName.ToString(), *ScheduleEntry.WorldPosition.ToString());
-	}
+	return FindComponentByClass<UNPCScheduleComponent>();
 }
 
 void AFarmingNPC::StartConversation_Implementation(AActor* InteractingActor)

@@ -8,45 +8,17 @@
 #include "FarmingNPC.generated.h"
 
 class UFarmingWorldSaveGame;
-class UDialogueData;
-struct FNPCRelationshipSave;
+class UNPCCharacterData;
+class UNPCDataComponent;
+class UNPCScheduleComponent;
 
 /**
- * Schedule entry defining where an NPC should be at a specific time
- * Note: This is the legacy schedule system. For grid-based patrolling, use NPCScheduleComponent.
- */
-USTRUCT(BlueprintType)
-struct FNPCDailySchedule
-{
-	GENERATED_BODY()
-
-	/** Day of week (0=Monday, 6=Sunday, -1=Any day) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule")
-	int32 DayOfWeek = -1;
-
-	/** Season this schedule applies to (-1 = all seasons) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule")
-	int32 Season = -1;
-
-	/** Time of day to move to this location (in hours, 0-24) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule")
-	float TimeOfDay = 0.0f;
-
-	/** Target location name or tag */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule")
-	FName LocationTag;
-
-	/** Optional specific world position */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule")
-	FVector WorldPosition = FVector::ZeroVector;
-
-	/** Optional animation or activity at this location */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Schedule")
-	FName Activity;
-};
-
-/**
- * NPC character with schedule system, dialogue, and friendship tracking
+ * NPC character with schedule system, dialogue, and friendship tracking.
+ * Uses NPCDataComponent for all NPC data (appearance, dialogue, gifts, etc.)
+ * Uses NPCScheduleComponent for movement and patrolling.
+ *
+ * For a fully data-driven NPC, use the generic BP_GenericNPC Blueprint instead.
+ * This class provides a C++ base for custom NPC behaviors.
  */
 UCLASS(Blueprintable)
 class HOBUNJIHOLLOW_API AFarmingNPC : public ACharacter, public IInteractable
@@ -62,25 +34,17 @@ protected:
 public:
 	virtual void Tick(float DeltaTime) override;
 
-	/** Unique NPC identifier */
+	/** Unique NPC identifier (synced with NPCDataComponent) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC")
 	FName NPCID;
 
-	/** Display name */
+	/** Display name (can be overridden, otherwise from NPCDataComponent) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC")
 	FText DisplayName;
 
-	/** NPC's daily schedule */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Schedule")
-	TArray<FNPCDailySchedule> Schedule;
-
-	/** Current schedule entry being followed */
-	UPROPERTY(BlueprintReadOnly, Category = "NPC|Schedule")
-	int32 CurrentScheduleIndex = -1;
-
-	/** Reference to dialogue data asset */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Dialogue")
-	UDialogueData* DialogueData;
+	/** Reference to NPC character data asset (alternative to using NPCDataComponent's registry lookup) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Data")
+	UNPCCharacterData* NPCData;
 
 	/** Friendship points required for each heart level */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Friendship")
@@ -117,22 +81,19 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "NPC|Dialogue")
 	void MarkDialogueSeen(AActor* ForPlayer, FName DialogueID);
 
-	/** Update NPC schedule based on current time */
-	UFUNCTION(BlueprintCallable, Category = "NPC|Schedule")
-	void UpdateSchedule(float CurrentTime, int32 CurrentDay, int32 CurrentSeason);
-
 	/** Start conversation with this NPC */
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "NPC|Dialogue")
 	void StartConversation(AActor* InteractingActor);
 
+	/** Get the NPC data component (if attached) */
+	UFUNCTION(BlueprintPure, Category = "NPC")
+	UNPCDataComponent* GetDataComponent() const;
+
+	/** Get the NPC schedule component (if attached) */
+	UFUNCTION(BlueprintPure, Category = "NPC")
+	UNPCScheduleComponent* GetScheduleComponent() const;
+
 protected:
-	/** Find the best matching schedule entry */
-	int32 FindBestScheduleEntry(float CurrentTime, int32 CurrentDay, int32 CurrentSeason) const;
-
-	/** Move to scheduled location */
-	UFUNCTION(BlueprintNativeEvent, Category = "NPC|Schedule")
-	void MoveToScheduledLocation(const FNPCDailySchedule& ScheduleEntry);
-
 	/** Currently highlighted for interaction */
 	bool bIsHighlighted = false;
 };
