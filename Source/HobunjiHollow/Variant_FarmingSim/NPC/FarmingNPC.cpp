@@ -93,7 +93,7 @@ int32 AFarmingNPC::GetFriendshipPoints(AActor* ForPlayer) const
 	}
 
 	// Get relationship from PlayerState
-	FPlayerNPCRelationship Relationship;
+	FNPCRelationship Relationship;
 	if (FarmingPS->GetNPCRelationship(NPCID, Relationship))
 	{
 		return Relationship.FriendshipPoints;
@@ -138,7 +138,7 @@ void AFarmingNPC::AddFriendshipPoints(AActor* ForPlayer, int32 Points)
 	}
 
 	// Get or create relationship
-	FPlayerNPCRelationship Relationship;
+	FNPCRelationship Relationship;
 	bool bExisted = FarmingPS->GetNPCRelationship(NPCID, Relationship);
 
 	if (bExisted)
@@ -199,7 +199,7 @@ bool AFarmingNPC::HasSeenDialogue(AActor* ForPlayer, FName DialogueID) const
 		return false;
 	}
 
-	FPlayerNPCRelationship Relationship;
+	FNPCRelationship Relationship;
 	if (FarmingPS->GetNPCRelationship(NPCID, Relationship))
 	{
 		return Relationship.CompletedDialogues.Contains(DialogueID);
@@ -237,7 +237,7 @@ void AFarmingNPC::MarkDialogueSeen(AActor* ForPlayer, FName DialogueID)
 	}
 
 	// Get or create relationship
-	FPlayerNPCRelationship Relationship;
+	FNPCRelationship Relationship;
 	bool bExisted = FarmingPS->GetNPCRelationship(NPCID, Relationship);
 
 	if (!bExisted)

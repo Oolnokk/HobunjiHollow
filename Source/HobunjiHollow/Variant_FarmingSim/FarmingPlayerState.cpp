@@ -26,9 +26,9 @@ void AFarmingPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 	DOREPLIFETIME(AFarmingPlayerState, NPCRelationships);
 }
 
-bool AFarmingPlayerState::GetNPCRelationship(FName NPCID, FPlayerNPCRelationship& OutRelationship) const
+bool AFarmingPlayerState::GetNPCRelationship(FName NPCID, FNPCRelationship& OutRelationship) const
 {
-	for (const FPlayerNPCRelationship& Relationship : NPCRelationships)
+	for (const FNPCRelationship& Relationship : NPCRelationships)
 	{
 		if (Relationship.NPCID == NPCID)
 		{
@@ -39,7 +39,7 @@ bool AFarmingPlayerState::GetNPCRelationship(FName NPCID, FPlayerNPCRelationship
 	return false;
 }
 
-void AFarmingPlayerState::SetNPCRelationship(const FPlayerNPCRelationship& Relationship)
+void AFarmingPlayerState::SetNPCRelationship(const FNPCRelationship& Relationship)
 {
 	// Only allow server to modify relationships
 	if (!HasAuthority())
@@ -102,7 +102,7 @@ void AFarmingPlayerState::SaveToWorldSave(UFarmingWorldSaveGame* WorldSave)
 	// For farmhands, we store their relationships in the world save
 	if (PlayerRole == EFarmingPlayerRole::Farmhand || PlayerRole == EFarmingPlayerRole::Host)
 	{
-		for (const FPlayerNPCRelationship& PlayerRelationship : NPCRelationships)
+		for (const FNPCRelationship& PlayerRelationship : NPCRelationships)
 		{
 			FNPCRelationshipSave SaveData;
 			SaveData.NPCID = PlayerRelationship.NPCID;
@@ -135,7 +135,7 @@ void AFarmingPlayerState::RestoreFromWorldSave(UFarmingWorldSaveGame* WorldSave)
 	// Restore all NPC relationships from world save
 	for (const FNPCRelationshipSave& SaveData : WorldSave->NPCRelationships)
 	{
-		FPlayerNPCRelationship PlayerRelationship;
+		FNPCRelationship PlayerRelationship;
 		PlayerRelationship.NPCID = SaveData.NPCID;
 		PlayerRelationship.FriendshipPoints = SaveData.FriendshipPoints;
 		PlayerRelationship.RomanceLevel = SaveData.RomanceLevel;
