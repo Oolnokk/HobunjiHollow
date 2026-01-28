@@ -168,6 +168,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Grid")
 	TArray<FMapScheduleLocation> GetNPCScheduleLocations(const FString& NpcId) const;
 
+	/** Get full NPC schedule data including times */
+	UFUNCTION(BlueprintPure, Category = "Grid")
+	bool GetNPCScheduleData(const FString& NpcId, FMapPathData& OutScheduleData) const;
+
+	/** Get all NPC schedules */
+	UFUNCTION(BlueprintPure, Category = "Grid")
+	TArray<FMapPathData> GetAllNPCSchedules() const;
+
 	// ---- Road Network ----
 
 	/** Get all roads in the map */

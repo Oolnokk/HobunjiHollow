@@ -92,12 +92,17 @@ bool UNPCScheduleComponent::LoadScheduleFromJSON()
 		return false;
 	}
 
-	// Get schedule locations for this NPC
-	TArray<FMapScheduleLocation> JSONLocations = GridManager->GetNPCScheduleLocations(NPCId);
-
-	if (JSONLocations.Num() == 0)
+	// Get full schedule data for this NPC (includes times)
+	FMapPathData ScheduleData;
+	if (!GridManager->GetNPCScheduleData(NPCId, ScheduleData))
 	{
 		UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent: No schedule data found for NPC '%s'"), *NPCId);
+		return false;
+	}
+
+	if (ScheduleData.Locations.Num() == 0)
+	{
+		UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent: No locations in schedule data for NPC '%s'"), *NPCId);
 		return false;
 	}
 
@@ -106,7 +111,7 @@ bool UNPCScheduleComponent::LoadScheduleFromJSON()
 	PatrolRoute.RouteId = FString::Printf(TEXT("%s_patrol"), *NPCId);
 	PatrolRoute.bLooping = true;
 
-	for (const FMapScheduleLocation& JSONLoc : JSONLocations)
+	for (const FMapScheduleLocation& JSONLoc : ScheduleData.Locations)
 	{
 		FPatrolWaypoint Waypoint;
 		Waypoint.Name = JSONLoc.Name;
@@ -121,31 +126,46 @@ bool UNPCScheduleComponent::LoadScheduleFromJSON()
 
 	PatrolRoutes.Add(PatrolRoute);
 
-	// Create a default schedule entry for this patrol (6am - 6pm)
-	FNPCScheduleEntry DayShift;
-	DayShift.StartTime = 6.0f;
-	DayShift.EndTime = 18.0f;
-	DayShift.bIsPatrol = true;
-	DayShift.PatrolRouteId = PatrolRoute.RouteId;
-	DayShift.Activity = TEXT("patrolling");
-	Schedule.Add(DayShift);
+	// Use times from JSON data
+	float StartTime = ScheduleData.StartTime;
+	float EndTime = ScheduleData.EndTime;
 
-	// Create a "go home" entry for after shift (placeholder - goes to first waypoint)
+	// Create schedule entry for patrol using JSON times
+	FNPCScheduleEntry OnDuty;
+	OnDuty.StartTime = StartTime;
+	OnDuty.EndTime = EndTime;
+	OnDuty.bIsPatrol = true;
+	OnDuty.PatrolRouteId = PatrolRoute.RouteId;
+	OnDuty.Activity = TEXT("patrolling");
+	Schedule.Add(OnDuty);
+
+	// Create an "off duty" entry for when not patrolling
+	// Time is inverted: if patrol is 20-8, off duty is 8-20
 	if (PatrolRoute.Waypoints.Num() > 0)
 	{
 		FNPCScheduleEntry OffDuty;
-		OffDuty.StartTime = 18.0f;
-		OffDuty.EndTime = 6.0f;
+		OffDuty.StartTime = EndTime;
+		OffDuty.EndTime = StartTime;
 		OffDuty.bIsPatrol = false;
 		OffDuty.LocationName = TEXT("home");
-		OffDuty.Location = PatrolRoute.Waypoints[0].GridPosition; // Default to first point
-		OffDuty.Facing = EGridDirection::South;
+		// Use spawn point as home location if available
+		const FMapScheduleLocation* SpawnLoc = ScheduleData.GetSpawnLocation();
+		if (SpawnLoc)
+		{
+			OffDuty.Location = SpawnLoc->GetGridCoordinate();
+			OffDuty.Facing = SpawnLoc->GetFacingDirection();
+		}
+		else
+		{
+			OffDuty.Location = PatrolRoute.Waypoints[0].GridPosition;
+			OffDuty.Facing = EGridDirection::South;
+		}
 		OffDuty.Activity = TEXT("resting");
 		Schedule.Add(OffDuty);
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent: Loaded %d waypoints for NPC '%s'"),
-		PatrolRoute.Waypoints.Num(), *NPCId);
+	UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent: Loaded %d waypoints for NPC '%s' (schedule %.0f:00 - %.0f:00)"),
+		PatrolRoute.Waypoints.Num(), *NPCId, StartTime, EndTime);
 
 	return true;
 }

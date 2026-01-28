@@ -419,6 +419,11 @@ void AMapDataImporter::ParsePathsLayer(const TSharedPtr<FJsonObject>& LayersObje
 					Path.Type = PathType;
 					(*PathObject)->TryGetStringField(TEXT("id"), Path.Id);
 					(*PathObject)->TryGetStringField(TEXT("npcId"), Path.NpcId);
+					(*PathObject)->TryGetStringField(TEXT("npcClass"), Path.NpcClass);
+
+					// Parse schedule times (for NPC schedules)
+					(*PathObject)->TryGetNumberField(TEXT("startTime"), Path.StartTime);
+					(*PathObject)->TryGetNumberField(TEXT("endTime"), Path.EndTime);
 
 					// Parse locations
 					const TArray<TSharedPtr<FJsonValue>>* LocationsArray;

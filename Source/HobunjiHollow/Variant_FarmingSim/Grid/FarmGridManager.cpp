@@ -529,6 +529,34 @@ TArray<FMapScheduleLocation> UFarmGridManager::GetNPCScheduleLocations(const FSt
 	return Result;
 }
 
+bool UFarmGridManager::GetNPCScheduleData(const FString& NpcId, FMapPathData& OutScheduleData) const
+{
+	for (const FMapPathData& Path : Paths)
+	{
+		if (Path.IsNPCSchedule() && Path.NpcId == NpcId)
+		{
+			OutScheduleData = Path;
+			return true;
+		}
+	}
+	return false;
+}
+
+TArray<FMapPathData> UFarmGridManager::GetAllNPCSchedules() const
+{
+	TArray<FMapPathData> Result;
+
+	for (const FMapPathData& Path : Paths)
+	{
+		if (Path.IsNPCSchedule())
+		{
+			Result.Add(Path);
+		}
+	}
+
+	return Result;
+}
+
 float UFarmGridManager::SampleHeightAtWorldPosition(float WorldX, float WorldY) const
 {
 	UWorld* World = GetWorld();

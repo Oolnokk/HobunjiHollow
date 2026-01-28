@@ -288,6 +288,18 @@ struct HOBUNJIHOLLOW_API FMapPathData
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data")
 	FString NpcId;
 
+	/** Schedule start time in hours (0-24), e.g. 20.0 = 8 PM */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data")
+	float StartTime = 6.0f;
+
+	/** Schedule end time in hours (0-24), supports wrap past midnight */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data")
+	float EndTime = 18.0f;
+
+	/** Blueprint class to spawn for this NPC (optional, can use registry) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data")
+	FString NpcClass;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data")
 	TArray<FMapScheduleLocation> Locations;
 
@@ -296,6 +308,32 @@ struct HOBUNJIHOLLOW_API FMapPathData
 
 	bool IsNPCSchedule() const { return Type == TEXT("schedule_points") && !NpcId.IsEmpty(); }
 	bool IsRoad() const { return Type == TEXT("road"); }
+
+	/** Get the spawn location (first location with "spawn_point" activity) */
+	const FMapScheduleLocation* GetSpawnLocation() const
+	{
+		for (const FMapScheduleLocation& Loc : Locations)
+		{
+			if (Loc.Activities.Contains(TEXT("spawn_point")))
+			{
+				return &Loc;
+			}
+		}
+		return Locations.Num() > 0 ? &Locations[0] : nullptr;
+	}
+
+	/** Get the despawn location (first location with "despawn_point" activity) */
+	const FMapScheduleLocation* GetDespawnLocation() const
+	{
+		for (const FMapScheduleLocation& Loc : Locations)
+		{
+			if (Loc.Activities.Contains(TEXT("despawn_point")))
+			{
+				return &Loc;
+			}
+		}
+		return nullptr;
+	}
 };
 
 /**
