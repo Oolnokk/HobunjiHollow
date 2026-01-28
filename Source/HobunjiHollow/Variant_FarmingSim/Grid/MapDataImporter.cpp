@@ -3,6 +3,7 @@
 #include "MapDataImporter.h"
 #include "FarmGridManager.h"
 #include "ObjectClassRegistry.h"
+#include "Components/SceneComponent.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
@@ -15,6 +16,10 @@ AMapDataImporter::AMapDataImporter()
 {
 	PrimaryActorTick.bCanEverTick = false;
 	bAutoSpawnOnBeginPlay = true;
+
+	// Create root component so actor has a visible transform in editor
+	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
+	RootComponent = SceneRoot;
 }
 
 void AMapDataImporter::BeginPlay()
@@ -51,16 +56,6 @@ void AMapDataImporter::PostEditChangeProperty(FPropertyChangedEvent& PropertyCha
 			ReimportAndRedraw();
 		}
 	}
-	// Redraw when transform properties change
-	else if (PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, WorldOffset) ||
-			 PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, GridScale) ||
-			 PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, GridRotation))
-	{
-		if (bDrawDebugGrid && bHasValidData)
-		{
-			DrawAllGridData();
-		}
-	}
 	// Redraw when debug settings change
 	else if (PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, bDrawDebugGrid) ||
 			 PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, bDrawTerrain) ||
@@ -88,6 +83,17 @@ void AMapDataImporter::PostEditChangeProperty(FPropertyChangedEvent& PropertyCha
 		{
 			ClearDebugDraw();
 		}
+	}
+}
+
+void AMapDataImporter::PostEditMove(bool bFinished)
+{
+	Super::PostEditMove(bFinished);
+
+	// Redraw when actor is moved/rotated/scaled in editor
+	if (bDrawDebugGrid && bHasValidData)
+	{
+		DrawAllGridData();
 	}
 }
 #endif
@@ -144,11 +150,12 @@ bool AMapDataImporter::ImportFromJsonString(const FString& JsonString)
 
 	bHasValidData = true;
 
-	// Initialize grid manager with parsed data and transform
+	// Initialize grid manager with parsed data and actor's transform
 	if (UFarmGridManager* GridManager = GetGridManager())
 	{
 		GridManager->InitializeFromMapData(ParsedMapData);
-		GridManager->SetGridTransform(WorldOffset, GridScale, GridRotation);
+		// Use actor's transform: location for offset, X scale for grid scale, yaw for rotation
+		GridManager->SetGridTransform(GetActorLocation(), GetActorScale3D().X, GetActorRotation().Yaw);
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("MapDataImporter: Successfully imported map '%s' (%dx%d)"),
@@ -759,28 +766,24 @@ FVector AMapDataImporter::GridToWorldPosition(const FGridCoordinate& GridPos) co
 
 FVector AMapDataImporter::GridToWorldPosition2D(int32 GridX, int32 GridY) const
 {
-	// Apply 2D transform (scale and rotation)
-	FVector2D TransformedPos = ApplyGridTransform2D(GridX + 0.5f, GridY + 0.5f);
+	// Get actor transform (location, rotation, scale)
+	const FVector ActorLocation = GetActorLocation();
+	const FRotator ActorRotation = GetActorRotation();
+	const FVector ActorScale = GetActorScale3D();
 
-	// Add grid origin offset and world offset
-	FVector WorldPos;
-	WorldPos.X = TransformedPos.X + ParsedMapData.Grid.OriginOffset.X + WorldOffset.X;
-	WorldPos.Y = TransformedPos.Y + ParsedMapData.Grid.OriginOffset.Y + WorldOffset.Y;
-	WorldPos.Z = SampleHeightAtWorld(WorldPos.X, WorldPos.Y) + WorldOffset.Z;
+	// Use X scale for uniform grid scaling (ignore Y/Z)
+	float GridScale = ActorScale.X;
+	float CellSize = ParsedMapData.Grid.CellSize * GridScale;
 
-	return WorldPos;
-}
+	// Calculate local position (grid cell center)
+	float LocalX = (GridX + 0.5f) * CellSize + ParsedMapData.Grid.OriginOffset.X * GridScale;
+	float LocalY = (GridY + 0.5f) * CellSize + ParsedMapData.Grid.OriginOffset.Y * GridScale;
 
-FGridCoordinate AMapDataImporter::WorldToGridPosition(const FVector& WorldPos) const
-{
-	// Remove offsets
-	float LocalX = WorldPos.X - ParsedMapData.Grid.OriginOffset.X - WorldOffset.X;
-	float LocalY = WorldPos.Y - ParsedMapData.Grid.OriginOffset.Y - WorldOffset.Y;
-
-	// Reverse rotation
-	if (!FMath::IsNearlyZero(GridRotation))
+	// Apply rotation (yaw only)
+	float Yaw = ActorRotation.Yaw;
+	if (!FMath::IsNearlyZero(Yaw))
 	{
-		float RadAngle = FMath::DegreesToRadians(-GridRotation); // Negative for inverse
+		float RadAngle = FMath::DegreesToRadians(Yaw);
 		float CosAngle = FMath::Cos(RadAngle);
 		float SinAngle = FMath::Sin(RadAngle);
 		float RotatedX = LocalX * CosAngle - LocalY * SinAngle;
@@ -789,8 +792,46 @@ FGridCoordinate AMapDataImporter::WorldToGridPosition(const FVector& WorldPos) c
 		LocalY = RotatedY;
 	}
 
-	// Reverse scale
+	// Add actor location
+	FVector WorldPos;
+	WorldPos.X = LocalX + ActorLocation.X;
+	WorldPos.Y = LocalY + ActorLocation.Y;
+	WorldPos.Z = SampleHeightAtWorld(WorldPos.X, WorldPos.Y) + ActorLocation.Z;
+
+	return WorldPos;
+}
+
+FGridCoordinate AMapDataImporter::WorldToGridPosition(const FVector& WorldPos) const
+{
+	// Get actor transform
+	const FVector ActorLocation = GetActorLocation();
+	const FRotator ActorRotation = GetActorRotation();
+	const FVector ActorScale = GetActorScale3D();
+
+	float GridScale = ActorScale.X;
 	float CellSize = ParsedMapData.Grid.CellSize * GridScale;
+
+	// Remove actor location
+	float LocalX = WorldPos.X - ActorLocation.X;
+	float LocalY = WorldPos.Y - ActorLocation.Y;
+
+	// Reverse rotation
+	float Yaw = ActorRotation.Yaw;
+	if (!FMath::IsNearlyZero(Yaw))
+	{
+		float RadAngle = FMath::DegreesToRadians(-Yaw); // Negative for inverse
+		float CosAngle = FMath::Cos(RadAngle);
+		float SinAngle = FMath::Sin(RadAngle);
+		float RotatedX = LocalX * CosAngle - LocalY * SinAngle;
+		float RotatedY = LocalX * SinAngle + LocalY * CosAngle;
+		LocalX = RotatedX;
+		LocalY = RotatedY;
+	}
+
+	// Remove grid origin offset and convert to grid coordinates
+	LocalX -= ParsedMapData.Grid.OriginOffset.X * GridScale;
+	LocalY -= ParsedMapData.Grid.OriginOffset.Y * GridScale;
+
 	int32 GridX = FMath::FloorToInt(LocalX / CellSize);
 	int32 GridY = FMath::FloorToInt(LocalY / CellSize);
 
@@ -799,24 +840,28 @@ FGridCoordinate AMapDataImporter::WorldToGridPosition(const FVector& WorldPos) c
 
 FTransform AMapDataImporter::GetGridTransform() const
 {
-	FVector Location = WorldOffset + FVector(ParsedMapData.Grid.OriginOffset.X, ParsedMapData.Grid.OriginOffset.Y, 0.0f);
-	FRotator Rotation(0.0f, GridRotation, 0.0f);
-	FVector Scale(GridScale, GridScale, 1.0f);
-	return FTransform(Rotation, Location, Scale);
+	// Return the actor's transform combined with grid origin offset
+	FTransform ActorTransform = GetActorTransform();
+	FVector OriginOffset(ParsedMapData.Grid.OriginOffset.X, ParsedMapData.Grid.OriginOffset.Y, 0.0f);
+	ActorTransform.AddToTranslation(ActorTransform.TransformVector(OriginOffset * ActorTransform.GetScale3D().X));
+	return ActorTransform;
 }
 
 FVector2D AMapDataImporter::ApplyGridTransform2D(float GridX, float GridY) const
 {
+	// Use actor scale for grid scaling
+	float GridScale = GetActorScale3D().X;
 	float CellSize = ParsedMapData.Grid.CellSize * GridScale;
 
 	// Scale first
 	float ScaledX = GridX * CellSize;
 	float ScaledY = GridY * CellSize;
 
-	// Then rotate around origin
-	if (!FMath::IsNearlyZero(GridRotation))
+	// Then rotate around origin using actor's yaw
+	float Yaw = GetActorRotation().Yaw;
+	if (!FMath::IsNearlyZero(Yaw))
 	{
-		float RadAngle = FMath::DegreesToRadians(GridRotation);
+		float RadAngle = FMath::DegreesToRadians(Yaw);
 		float CosAngle = FMath::Cos(RadAngle);
 		float SinAngle = FMath::Sin(RadAngle);
 		float RotatedX = ScaledX * CosAngle - ScaledY * SinAngle;
@@ -829,10 +874,9 @@ FVector2D AMapDataImporter::ApplyGridTransform2D(float GridX, float GridY) const
 
 float AMapDataImporter::SampleHeightAtGrid(int32 GridX, int32 GridY) const
 {
-	FVector2D TransformedPos = ApplyGridTransform2D(GridX + 0.5f, GridY + 0.5f);
-	float WorldX = TransformedPos.X + ParsedMapData.Grid.OriginOffset.X + WorldOffset.X;
-	float WorldY = TransformedPos.Y + ParsedMapData.Grid.OriginOffset.Y + WorldOffset.Y;
-	return SampleHeightAtWorld(WorldX, WorldY);
+	// Use the full GridToWorldPosition2D which handles all transforms
+	FVector WorldPos = GridToWorldPosition2D(GridX, GridY);
+	return SampleHeightAtWorld(WorldPos.X, WorldPos.Y);
 }
 
 float AMapDataImporter::SampleHeightAtWorld(float WorldX, float WorldY) const

@@ -9,10 +9,16 @@
 
 class UFarmGridManager;
 class UObjectClassRegistry;
+class UBillboardComponent;
 
 /**
  * Actor that imports map data from JSON and spawns objects into the level.
  * Place one per level to manage grid-based content.
+ *
+ * The actor's transform controls the grid placement:
+ * - Location: Grid origin position
+ * - Rotation (Yaw): Grid rotation
+ * - Scale (X/Y): Grid scale (Z is ignored)
  */
 UCLASS(BlueprintType, Blueprintable)
 class HOBUNJIHOLLOW_API AMapDataImporter : public AActor
@@ -31,18 +37,6 @@ public:
 	/** Object class registry for mapping JSON IDs to blueprints */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data")
 	UObjectClassRegistry* ObjectRegistry;
-
-	/** World offset for aligning grid to terrain */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Alignment")
-	FVector WorldOffset = FVector::ZeroVector;
-
-	/** Scale factor for grid (1.0 = 1 grid cell = CellSize units) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Alignment", meta = (ClampMin = "0.1"))
-	float GridScale = 1.0f;
-
-	/** Rotation of the grid in degrees (yaw rotation around Z axis) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Alignment", meta = (ClampMin = "-180", ClampMax = "180"))
-	float GridRotation = 0.0f;
 
 	/** Whether to automatically spawn objects on BeginPlay */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data")
@@ -179,7 +173,12 @@ protected:
 
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+	virtual void PostEditMove(bool bFinished) override;
 #endif
+
+	/** Root scene component for transform */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Map Data")
+	USceneComponent* SceneRoot;
 
 	UPROPERTY()
 	FMapData ParsedMapData;
