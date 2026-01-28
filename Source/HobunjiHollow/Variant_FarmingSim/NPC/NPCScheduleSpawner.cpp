@@ -3,7 +3,8 @@
 #include "NPCScheduleSpawner.h"
 #include "Grid/FarmGridManager.h"
 #include "FarmingTimeManager.h"
-#include "ObjectClassRegistry.h"
+#include "NPCDataRegistry.h"
+#include "NPCDataComponent.h"
 #include "NPCScheduleComponent.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -197,6 +198,14 @@ AActor* ANPCScheduleSpawner::SpawnNPC(FScheduledNPCState& State)
 	{
 		State.SpawnedActor = SpawnedActor;
 
+		// Configure the data component if present
+		if (UNPCDataComponent* DataComp = SpawnedActor->FindComponentByClass<UNPCDataComponent>())
+		{
+			DataComp->NPCId = State.NpcId;
+			DataComp->DataRegistry = NPCDataRegistry;
+			// Component will load data and apply appearance on next tick
+		}
+
 		// Configure the schedule component if present
 		if (UNPCScheduleComponent* ScheduleComp = SpawnedActor->FindComponentByClass<UNPCScheduleComponent>())
 		{
@@ -240,7 +249,7 @@ void ANPCScheduleSpawner::DespawnNPC(FScheduledNPCState& State)
 
 TSubclassOf<AActor> ANPCScheduleSpawner::GetNPCClass(const FScheduledNPCState& State) const
 {
-	// First try the class specified in JSON
+	// First try the class specified in JSON schedule
 	if (!State.ScheduleData.NpcClass.IsEmpty())
 	{
 		UClass* FoundClass = LoadClass<AActor>(nullptr, *State.ScheduleData.NpcClass);
@@ -250,13 +259,13 @@ TSubclassOf<AActor> ANPCScheduleSpawner::GetNPCClass(const FScheduledNPCState& S
 		}
 	}
 
-	// Then try the registry
-	if (NPCRegistry)
+	// Then try the NPC data registry (ActorClass in NPCCharacterData)
+	if (NPCDataRegistry)
 	{
-		TSubclassOf<AActor> RegistryClass = NPCRegistry->GetClassForId(State.NpcId);
-		if (RegistryClass)
+		UNPCCharacterData* NPCData = NPCDataRegistry->GetNPCData(State.NpcId);
+		if (NPCData && NPCData->ActorClass)
 		{
-			return RegistryClass;
+			return NPCData->ActorClass;
 		}
 	}
 

@@ -408,6 +408,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Identity")
 	int32 Age = 25;
 
+	// ---- Spawning ----
+
+	/** The actor class to spawn for this NPC */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spawning")
+	TSubclassOf<AActor> ActorClass;
+
 	// ---- Appearance ----
 
 	/** Visual appearance configuration */

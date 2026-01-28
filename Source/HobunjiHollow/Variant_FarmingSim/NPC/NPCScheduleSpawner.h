@@ -9,7 +9,7 @@
 
 class UFarmGridManager;
 class AFarmingTimeManager;
-class UObjectClassRegistry;
+class UNPCDataRegistry;
 
 /**
  * Runtime state for a scheduled NPC
@@ -48,9 +48,9 @@ class HOBUNJIHOLLOW_API ANPCScheduleSpawner : public AActor
 public:
 	ANPCScheduleSpawner();
 
-	/** Object class registry for mapping NPC IDs to blueprint classes */
+	/** NPC data registry for looking up NPC data and classes */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Spawner")
-	UObjectClassRegistry* NPCRegistry;
+	UNPCDataRegistry* NPCDataRegistry;
 
 	/** Default NPC class to spawn if not found in registry */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Spawner")
