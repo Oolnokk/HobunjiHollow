@@ -104,7 +104,7 @@ void AFarmingPlayerState::SaveToWorldSave(UFarmingWorldSaveGame* WorldSave)
 	{
 		for (const FNPCRelationship& PlayerRelationship : NPCRelationships)
 		{
-			FNPCRelationshipSave SaveData;
+			FNPCRelationship SaveData;
 			SaveData.NPCID = PlayerRelationship.NPCID;
 			SaveData.FriendshipPoints = PlayerRelationship.FriendshipPoints;
 			SaveData.RomanceLevel = PlayerRelationship.RomanceLevel;
@@ -133,7 +133,7 @@ void AFarmingPlayerState::RestoreFromWorldSave(UFarmingWorldSaveGame* WorldSave)
 	NPCRelationships.Empty();
 
 	// Restore all NPC relationships from world save
-	for (const FNPCRelationshipSave& SaveData : WorldSave->NPCRelationships)
+	for (const FNPCRelationship& SaveData : WorldSave->NPCRelationships)
 	{
 		FNPCRelationship PlayerRelationship;
 		PlayerRelationship.NPCID = SaveData.NPCID;

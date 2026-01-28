@@ -26,8 +26,7 @@ struct FInventoryItemSave
 };
 
 // Use shared FNPCRelationship struct from NPCRelationshipTypes.h
-// Legacy typedef for backwards compatibility
-typedef FNPCRelationship FNPCRelationshipSave;
+// Note: Using FNPCRelationship directly as typedefs don't work with UHT UPROPERTY
 
 /**
  * Story choice tracking
@@ -95,7 +94,7 @@ public:
 
 	/** NPC relationships */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|NPCs")
-	TArray<FNPCRelationshipSave> NPCRelationships;
+	TArray<FNPCRelationship> NPCRelationships;
 
 	/** Story choices made */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Story")
@@ -115,9 +114,9 @@ public:
 
 	/** Get relationship data for an NPC */
 	UFUNCTION(BlueprintCallable, Category = "Save|NPCs")
-	bool GetNPCRelationship(FName NPCID, FNPCRelationshipSave& OutRelationship);
+	bool GetNPCRelationship(FName NPCID, FNPCRelationship& OutRelationship);
 
 	/** Set or update relationship data for an NPC */
 	UFUNCTION(BlueprintCallable, Category = "Save|NPCs")
-	void SetNPCRelationship(const FNPCRelationshipSave& Relationship);
+	void SetNPCRelationship(const FNPCRelationship& Relationship);
 };
