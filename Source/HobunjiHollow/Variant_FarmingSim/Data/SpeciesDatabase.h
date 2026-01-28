@@ -36,11 +36,11 @@ struct FSpeciesData : public FTableRowBase
 
 	/** Skeletal mesh for male characters of this species */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Species|Mesh")
-	USkeletalMesh* MaleSkeletalMesh;
+	USkeletalMesh* MaleSkeletalMesh = nullptr;
 
 	/** Skeletal mesh for female characters of this species */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Species|Mesh")
-	USkeletalMesh* FemaleSkeletalMesh;
+	USkeletalMesh* FemaleSkeletalMesh = nullptr;
 
 	/** Animation Blueprint for this species (optional, falls back to default if not set) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Species|Animation")
@@ -48,7 +48,7 @@ struct FSpeciesData : public FTableRowBase
 
 	/** Icon for this species in UI */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Species|UI")
-	UTexture2D* SpeciesIcon;
+	UTexture2D* SpeciesIcon = nullptr;
 
 	/** Whether this species is currently available for selection */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Species")
