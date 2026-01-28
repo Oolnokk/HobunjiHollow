@@ -41,7 +41,54 @@ void AMapDataImporter::PostEditChangeProperty(FPropertyChangedEvent& PropertyCha
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 
-	// Could trigger reimport on certain property changes if desired
+	FName PropertyName = PropertyChangedEvent.GetPropertyName();
+
+	// Reimport and redraw when JSON path changes
+	if (PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, JsonFilePath))
+	{
+		if (bDrawDebugGrid)
+		{
+			ReimportAndRedraw();
+		}
+	}
+	// Redraw when transform properties change
+	else if (PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, WorldOffset) ||
+			 PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, GridScale) ||
+			 PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, GridRotation))
+	{
+		if (bDrawDebugGrid && bHasValidData)
+		{
+			DrawAllGridData();
+		}
+	}
+	// Redraw when debug settings change
+	else if (PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, bDrawDebugGrid) ||
+			 PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, bDrawTerrain) ||
+			 PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, bDrawZones) ||
+			 PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, bDrawRoads) ||
+			 PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, bDrawPaths) ||
+			 PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, bDrawConnections) ||
+			 PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, bDrawGridLines) ||
+			 PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, DebugDrawHeightOffset) ||
+			 PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, DebugLineThickness) ||
+			 PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, DebugGridDrawRadius))
+	{
+		if (bDrawDebugGrid)
+		{
+			if (bHasValidData)
+			{
+				DrawAllGridData();
+			}
+			else
+			{
+				ReimportAndRedraw();
+			}
+		}
+		else
+		{
+			ClearDebugDraw();
+		}
+	}
 }
 #endif
 
@@ -97,10 +144,11 @@ bool AMapDataImporter::ImportFromJsonString(const FString& JsonString)
 
 	bHasValidData = true;
 
-	// Initialize grid manager with parsed data
+	// Initialize grid manager with parsed data and transform
 	if (UFarmGridManager* GridManager = GetGridManager())
 	{
 		GridManager->InitializeFromMapData(ParsedMapData);
+		GridManager->SetGridTransform(WorldOffset, GridScale, GridRotation);
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("MapDataImporter: Successfully imported map '%s' (%dx%d)"),
@@ -711,25 +759,108 @@ FVector AMapDataImporter::GridToWorldPosition(const FGridCoordinate& GridPos) co
 
 FVector AMapDataImporter::GridToWorldPosition2D(int32 GridX, int32 GridY) const
 {
-	float CellSize = ParsedMapData.Grid.CellSize * GridScale;
+	// Apply 2D transform (scale and rotation)
+	FVector2D TransformedPos = ApplyGridTransform2D(GridX + 0.5f, GridY + 0.5f);
 
+	// Add grid origin offset and world offset
 	FVector WorldPos;
-	WorldPos.X = (GridX + 0.5f) * CellSize + ParsedMapData.Grid.OriginOffset.X + WorldOffset.X;
-	WorldPos.Y = (GridY + 0.5f) * CellSize + ParsedMapData.Grid.OriginOffset.Y + WorldOffset.Y;
-	WorldPos.Z = SampleHeightAtGrid(GridX, GridY) + WorldOffset.Z;
+	WorldPos.X = TransformedPos.X + ParsedMapData.Grid.OriginOffset.X + WorldOffset.X;
+	WorldPos.Y = TransformedPos.Y + ParsedMapData.Grid.OriginOffset.Y + WorldOffset.Y;
+	WorldPos.Z = SampleHeightAtWorld(WorldPos.X, WorldPos.Y) + WorldOffset.Z;
 
 	return WorldPos;
 }
 
+FGridCoordinate AMapDataImporter::WorldToGridPosition(const FVector& WorldPos) const
+{
+	// Remove offsets
+	float LocalX = WorldPos.X - ParsedMapData.Grid.OriginOffset.X - WorldOffset.X;
+	float LocalY = WorldPos.Y - ParsedMapData.Grid.OriginOffset.Y - WorldOffset.Y;
+
+	// Reverse rotation
+	if (!FMath::IsNearlyZero(GridRotation))
+	{
+		float RadAngle = FMath::DegreesToRadians(-GridRotation); // Negative for inverse
+		float CosAngle = FMath::Cos(RadAngle);
+		float SinAngle = FMath::Sin(RadAngle);
+		float RotatedX = LocalX * CosAngle - LocalY * SinAngle;
+		float RotatedY = LocalX * SinAngle + LocalY * CosAngle;
+		LocalX = RotatedX;
+		LocalY = RotatedY;
+	}
+
+	// Reverse scale
+	float CellSize = ParsedMapData.Grid.CellSize * GridScale;
+	int32 GridX = FMath::FloorToInt(LocalX / CellSize);
+	int32 GridY = FMath::FloorToInt(LocalY / CellSize);
+
+	return FGridCoordinate(GridX, GridY);
+}
+
+FTransform AMapDataImporter::GetGridTransform() const
+{
+	FVector Location = WorldOffset + FVector(ParsedMapData.Grid.OriginOffset.X, ParsedMapData.Grid.OriginOffset.Y, 0.0f);
+	FRotator Rotation(0.0f, GridRotation, 0.0f);
+	FVector Scale(GridScale, GridScale, 1.0f);
+	return FTransform(Rotation, Location, Scale);
+}
+
+FVector2D AMapDataImporter::ApplyGridTransform2D(float GridX, float GridY) const
+{
+	float CellSize = ParsedMapData.Grid.CellSize * GridScale;
+
+	// Scale first
+	float ScaledX = GridX * CellSize;
+	float ScaledY = GridY * CellSize;
+
+	// Then rotate around origin
+	if (!FMath::IsNearlyZero(GridRotation))
+	{
+		float RadAngle = FMath::DegreesToRadians(GridRotation);
+		float CosAngle = FMath::Cos(RadAngle);
+		float SinAngle = FMath::Sin(RadAngle);
+		float RotatedX = ScaledX * CosAngle - ScaledY * SinAngle;
+		float RotatedY = ScaledX * SinAngle + ScaledY * CosAngle;
+		return FVector2D(RotatedX, RotatedY);
+	}
+
+	return FVector2D(ScaledX, ScaledY);
+}
+
 float AMapDataImporter::SampleHeightAtGrid(int32 GridX, int32 GridY) const
+{
+	FVector2D TransformedPos = ApplyGridTransform2D(GridX + 0.5f, GridY + 0.5f);
+	float WorldX = TransformedPos.X + ParsedMapData.Grid.OriginOffset.X + WorldOffset.X;
+	float WorldY = TransformedPos.Y + ParsedMapData.Grid.OriginOffset.Y + WorldOffset.Y;
+	return SampleHeightAtWorld(WorldX, WorldY);
+}
+
+float AMapDataImporter::SampleHeightAtWorld(float WorldX, float WorldY) const
 {
 	if (UFarmGridManager* GridManager = GetGridManager())
 	{
-		float CellSize = ParsedMapData.Grid.CellSize * GridScale;
-		float WorldX = (GridX + 0.5f) * CellSize + ParsedMapData.Grid.OriginOffset.X + WorldOffset.X;
-		float WorldY = (GridY + 0.5f) * CellSize + ParsedMapData.Grid.OriginOffset.Y + WorldOffset.Y;
 		return GridManager->SampleHeightAtWorldPosition(WorldX, WorldY);
 	}
+
+	// Fallback: do our own raycast if grid manager isn't available
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return 0.0f;
+	}
+
+	FVector Start(WorldX, WorldY, 10000.0f);
+	FVector End(WorldX, WorldY, -10000.0f);
+
+	FHitResult HitResult;
+	FCollisionQueryParams QueryParams;
+	QueryParams.bTraceComplex = true;
+
+	if (World->LineTraceSingleByChannel(HitResult, Start, End, ECC_Visibility, QueryParams))
+	{
+		return HitResult.Location.Z;
+	}
+
 	return 0.0f;
 }
 
@@ -760,4 +891,533 @@ TMap<FString, FString> AMapDataImporter::ParsePropertiesObject(const TSharedPtr<
 	}
 
 	return Result;
+}
+
+// ---- Debug Visualization Implementation ----
+
+void AMapDataImporter::DrawAllGridData()
+{
+	if (!bHasValidData)
+	{
+		// Try to import first
+		if (!ImportFromJson())
+		{
+			UE_LOG(LogTemp, Warning, TEXT("MapDataImporter: Cannot draw - no valid map data"));
+			return;
+		}
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	// Clear previous debug lines
+	FlushPersistentDebugLines(World);
+
+	float Duration = DebugDrawDuration;
+
+	// Draw in order from bottom to top layer
+	if (bDrawGridLines)
+	{
+		DrawDebugGridLines(Duration);
+	}
+	if (bDrawTerrain)
+	{
+		DrawDebugTerrain(Duration);
+	}
+	if (bDrawZones)
+	{
+		DrawDebugZones(Duration);
+	}
+	if (bDrawRoads)
+	{
+		DrawDebugRoads(Duration);
+	}
+	if (bDrawPaths)
+	{
+		DrawDebugPaths(Duration);
+	}
+	if (bDrawConnections)
+	{
+		DrawDebugConnections(Duration);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("MapDataImporter: Drew debug visualization for map '%s'"), *ParsedMapData.DisplayName);
+}
+
+void AMapDataImporter::ClearDebugDraw()
+{
+	UWorld* World = GetWorld();
+	if (World)
+	{
+		FlushPersistentDebugLines(World);
+	}
+}
+
+void AMapDataImporter::ReimportAndRedraw()
+{
+	ClearDebugDraw();
+	if (ImportFromJson())
+	{
+		DrawAllGridData();
+	}
+}
+
+void AMapDataImporter::DrawDebugGridLines(float Duration) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	int32 StartX = 0;
+	int32 StartY = 0;
+	int32 EndX = ParsedMapData.Grid.Width;
+	int32 EndY = ParsedMapData.Grid.Height;
+
+	// If radius is set, draw around center of grid
+	if (DebugGridDrawRadius > 0)
+	{
+		int32 CenterX = ParsedMapData.Grid.Width / 2;
+		int32 CenterY = ParsedMapData.Grid.Height / 2;
+		StartX = FMath::Max(0, CenterX - DebugGridDrawRadius);
+		StartY = FMath::Max(0, CenterY - DebugGridDrawRadius);
+		EndX = FMath::Min(ParsedMapData.Grid.Width, CenterX + DebugGridDrawRadius);
+		EndY = FMath::Min(ParsedMapData.Grid.Height, CenterY + DebugGridDrawRadius);
+	}
+
+	FColor GridColor(80, 80, 80, 255); // Dark gray
+
+	// Draw vertical lines
+	for (int32 X = StartX; X <= EndX; ++X)
+	{
+		FVector Start = GridToWorldPosition2D(X, StartY);
+		FVector End = GridToWorldPosition2D(X, EndY);
+
+		// Offset corners to cell edges instead of centers
+		float HalfCell = ParsedMapData.Grid.CellSize * GridScale * 0.5f;
+		// We need to adjust since GridToWorldPosition2D centers on cell
+		// For grid lines, we want to draw at cell boundaries
+
+		Start.Z += DebugDrawHeightOffset;
+		End.Z += DebugDrawHeightOffset;
+
+		DrawDebugLine(World, Start - FVector(HalfCell, HalfCell, 0), End - FVector(HalfCell, HalfCell, 0), GridColor, false, Duration, 0, DebugLineThickness * 0.5f);
+	}
+
+	// Draw horizontal lines
+	for (int32 Y = StartY; Y <= EndY; ++Y)
+	{
+		FVector Start = GridToWorldPosition2D(StartX, Y);
+		FVector End = GridToWorldPosition2D(EndX, Y);
+
+		float HalfCell = ParsedMapData.Grid.CellSize * GridScale * 0.5f;
+
+		Start.Z += DebugDrawHeightOffset;
+		End.Z += DebugDrawHeightOffset;
+
+		DrawDebugLine(World, Start - FVector(HalfCell, HalfCell, 0), End - FVector(HalfCell, HalfCell, 0), GridColor, false, Duration, 0, DebugLineThickness * 0.5f);
+	}
+}
+
+void AMapDataImporter::DrawDebugTerrain(float Duration) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	// Draw explicit terrain tiles (non-default terrain)
+	for (const FMapTerrainTile& Tile : ParsedMapData.Terrain)
+	{
+		FVector CellCenter = GridToWorldPosition2D(Tile.X, Tile.Y);
+		CellCenter.Z += DebugDrawHeightOffset;
+
+		FColor TileColor = GetTerrainColor(Tile.Type);
+
+		// Draw filled cell indicator
+		float HalfSize = ParsedMapData.Grid.CellSize * GridScale * 0.4f; // Slightly smaller than cell
+
+		// Draw X pattern for terrain types
+		FVector Corner1 = CellCenter + FVector(-HalfSize, -HalfSize, 0);
+		FVector Corner2 = CellCenter + FVector(HalfSize, -HalfSize, 0);
+		FVector Corner3 = CellCenter + FVector(HalfSize, HalfSize, 0);
+		FVector Corner4 = CellCenter + FVector(-HalfSize, HalfSize, 0);
+
+		// Draw cell outline
+		DrawDebugLine(World, Corner1, Corner2, TileColor, false, Duration, 0, DebugLineThickness);
+		DrawDebugLine(World, Corner2, Corner3, TileColor, false, Duration, 0, DebugLineThickness);
+		DrawDebugLine(World, Corner3, Corner4, TileColor, false, Duration, 0, DebugLineThickness);
+		DrawDebugLine(World, Corner4, Corner1, TileColor, false, Duration, 0, DebugLineThickness);
+
+		// Draw center point
+		DrawDebugPoint(World, CellCenter, 8.0f, TileColor, false, Duration);
+
+		// Label blocked tiles
+		if (Tile.Type == TEXT("blocked") || Tile.Type == TEXT("water"))
+		{
+			// Draw X for impassable
+			DrawDebugLine(World, Corner1, Corner3, TileColor, false, Duration, 0, DebugLineThickness);
+			DrawDebugLine(World, Corner2, Corner4, TileColor, false, Duration, 0, DebugLineThickness);
+		}
+	}
+}
+
+void AMapDataImporter::DrawDebugZones(float Duration) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	for (const FMapZoneData& Zone : ParsedMapData.Zones)
+	{
+		FColor ZoneColor = GetZoneColor(Zone.Type);
+		float ZHeight = DebugDrawHeightOffset + 5.0f; // Zones slightly higher
+
+		if (Zone.Shape == TEXT("rect") || Zone.Shape.IsEmpty())
+		{
+			// Calculate corners
+			FVector Corner1 = GridToWorldPosition2D(Zone.X, Zone.Y);
+			FVector Corner2 = GridToWorldPosition2D(Zone.X + Zone.Width, Zone.Y);
+			FVector Corner3 = GridToWorldPosition2D(Zone.X + Zone.Width, Zone.Y + Zone.Height);
+			FVector Corner4 = GridToWorldPosition2D(Zone.X, Zone.Y + Zone.Height);
+
+			// Adjust to cell edges
+			float HalfCell = ParsedMapData.Grid.CellSize * GridScale * 0.5f;
+			Corner1 -= FVector(HalfCell, HalfCell, 0);
+			Corner2 += FVector(HalfCell, -HalfCell, 0);
+			Corner3 += FVector(HalfCell, HalfCell, 0);
+			Corner4 += FVector(-HalfCell, HalfCell, 0);
+
+			Corner1.Z += ZHeight;
+			Corner2.Z += ZHeight;
+			Corner3.Z += ZHeight;
+			Corner4.Z += ZHeight;
+
+			// Draw boundary
+			DrawDebugLine(World, Corner1, Corner2, ZoneColor, false, Duration, 0, DebugLineThickness * 1.5f);
+			DrawDebugLine(World, Corner2, Corner3, ZoneColor, false, Duration, 0, DebugLineThickness * 1.5f);
+			DrawDebugLine(World, Corner3, Corner4, ZoneColor, false, Duration, 0, DebugLineThickness * 1.5f);
+			DrawDebugLine(World, Corner4, Corner1, ZoneColor, false, Duration, 0, DebugLineThickness * 1.5f);
+
+			// Draw label
+			FVector LabelPos = (Corner1 + Corner3) * 0.5f + FVector(0, 0, 50);
+			DrawDebugString(World, LabelPos, FString::Printf(TEXT("%s [%s]"), *Zone.Id, *Zone.Type), nullptr, ZoneColor, Duration, true);
+		}
+		else if (Zone.Shape == TEXT("polygon") && Zone.Points.Num() >= 3)
+		{
+			// Draw polygon
+			FVector Centroid = FVector::ZeroVector;
+			for (int32 i = 0; i < Zone.Points.Num(); ++i)
+			{
+				FVector Start = GridToWorldPosition2D(Zone.Points[i].X, Zone.Points[i].Y);
+				FVector End = GridToWorldPosition2D(Zone.Points[(i + 1) % Zone.Points.Num()].X, Zone.Points[(i + 1) % Zone.Points.Num()].Y);
+
+				Start.Z += ZHeight;
+				End.Z += ZHeight;
+				Centroid += Start;
+
+				DrawDebugLine(World, Start, End, ZoneColor, false, Duration, 0, DebugLineThickness * 1.5f);
+			}
+
+			// Draw label at centroid
+			Centroid /= Zone.Points.Num();
+			Centroid.Z += 50.0f;
+			DrawDebugString(World, Centroid, FString::Printf(TEXT("%s [%s]"), *Zone.Id, *Zone.Type), nullptr, ZoneColor, Duration, true);
+		}
+	}
+}
+
+void AMapDataImporter::DrawDebugRoads(float Duration) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	TArray<FColor> RoadColors = {
+		FColor::Yellow,
+		FColor::Cyan,
+		FColor::Orange,
+		FColor(255, 128, 0), // Bright orange
+		FColor(128, 255, 128), // Light green
+		FColor(255, 128, 255) // Pink
+	};
+
+	int32 ColorIndex = 0;
+	float RoadHeight = DebugDrawHeightOffset + 15.0f;
+
+	for (const FMapRoadData& Road : ParsedMapData.Roads)
+	{
+		FColor RoadColor = RoadColors[ColorIndex % RoadColors.Num()];
+		ColorIndex++;
+
+		// Draw road segments
+		for (int32 i = 0; i < Road.Waypoints.Num() - 1; ++i)
+		{
+			FVector Start = GridToWorldPosition2D(Road.Waypoints[i].X, Road.Waypoints[i].Y);
+			FVector End = GridToWorldPosition2D(Road.Waypoints[i + 1].X, Road.Waypoints[i + 1].Y);
+
+			Start.Z += RoadHeight;
+			End.Z += RoadHeight;
+
+			DrawDebugLine(World, Start, End, RoadColor, false, Duration, 0, DebugLineThickness * 2.0f);
+
+			// Draw direction arrow if one-way
+			if (!Road.bBidirectional)
+			{
+				FVector Mid = (Start + End) * 0.5f;
+				FVector Dir = (End - Start).GetSafeNormal();
+				FVector Right = FVector::CrossProduct(Dir, FVector::UpVector) * 25.0f;
+
+				DrawDebugLine(World, Mid, Mid - Dir * 35.0f + Right, RoadColor, false, Duration, 0, DebugLineThickness);
+				DrawDebugLine(World, Mid, Mid - Dir * 35.0f - Right, RoadColor, false, Duration, 0, DebugLineThickness);
+			}
+		}
+
+		// Draw waypoint markers
+		for (int32 i = 0; i < Road.Waypoints.Num(); ++i)
+		{
+			const FRoadWaypoint& Waypoint = Road.Waypoints[i];
+			FVector Pos = GridToWorldPosition2D(Waypoint.X, Waypoint.Y);
+			Pos.Z += RoadHeight;
+
+			// Larger markers at endpoints
+			float Radius = (i == 0 || i == Road.Waypoints.Num() - 1) ? 25.0f : 12.0f;
+			DrawDebugSphere(World, Pos, Radius, 8, RoadColor, false, Duration, 0, DebugLineThickness);
+
+			// Draw waypoint name
+			if (!Waypoint.Name.IsEmpty())
+			{
+				DrawDebugString(World, Pos + FVector(0, 0, 40), Waypoint.Name, nullptr, RoadColor, Duration, true);
+			}
+		}
+
+		// Draw road ID label
+		if (Road.Waypoints.Num() > 0)
+		{
+			FVector LabelPos = GridToWorldPosition2D(Road.Waypoints[0].X, Road.Waypoints[0].Y);
+			LabelPos.Z += RoadHeight + 70.0f;
+			DrawDebugString(World, LabelPos, FString::Printf(TEXT("Road: %s"), *Road.Id), nullptr, RoadColor, Duration, true);
+		}
+	}
+}
+
+void AMapDataImporter::DrawDebugPaths(float Duration) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	TArray<FColor> PathColors = {
+		FColor(255, 100, 100), // Light red
+		FColor(100, 255, 100), // Light green
+		FColor(100, 100, 255), // Light blue
+		FColor(255, 255, 100), // Light yellow
+		FColor(255, 100, 255), // Light magenta
+	};
+
+	int32 ColorIndex = 0;
+	float PathHeight = DebugDrawHeightOffset + 20.0f;
+
+	for (const FMapPathData& Path : ParsedMapData.Paths)
+	{
+		FColor PathColor = PathColors[ColorIndex % PathColors.Num()];
+		ColorIndex++;
+
+		// Draw path segments connecting locations
+		for (int32 i = 0; i < Path.Locations.Num() - 1; ++i)
+		{
+			FVector Start = GridToWorldPosition2D(Path.Locations[i].X, Path.Locations[i].Y);
+			FVector End = GridToWorldPosition2D(Path.Locations[i + 1].X, Path.Locations[i + 1].Y);
+
+			Start.Z += PathHeight;
+			End.Z += PathHeight;
+
+			// Dashed line effect for paths (draw shorter segments)
+			DrawDebugLine(World, Start, End, PathColor, false, Duration, 0, DebugLineThickness * 1.5f);
+
+			// Direction arrow
+			FVector Mid = (Start + End) * 0.5f;
+			FVector Dir = (End - Start).GetSafeNormal();
+			FVector Right = FVector::CrossProduct(Dir, FVector::UpVector) * 20.0f;
+			DrawDebugLine(World, Mid, Mid - Dir * 30.0f + Right, PathColor, false, Duration, 0, DebugLineThickness);
+			DrawDebugLine(World, Mid, Mid - Dir * 30.0f - Right, PathColor, false, Duration, 0, DebugLineThickness);
+		}
+
+		// Draw location markers with activities
+		for (int32 i = 0; i < Path.Locations.Num(); ++i)
+		{
+			const FMapScheduleLocation& Location = Path.Locations[i];
+			FVector Pos = GridToWorldPosition2D(Location.X, Location.Y);
+			Pos.Z += PathHeight;
+
+			// Draw diamond shape for schedule locations
+			float Size = 20.0f;
+			FVector Top = Pos + FVector(0, 0, Size);
+			FVector Bottom = Pos - FVector(0, 0, Size * 0.5f);
+			FVector Left = Pos + FVector(-Size, 0, 0);
+			FVector Right = Pos + FVector(Size, 0, 0);
+			FVector Front = Pos + FVector(0, -Size, 0);
+			FVector Back = Pos + FVector(0, Size, 0);
+
+			DrawDebugLine(World, Top, Left, PathColor, false, Duration, 0, DebugLineThickness);
+			DrawDebugLine(World, Top, Right, PathColor, false, Duration, 0, DebugLineThickness);
+			DrawDebugLine(World, Top, Front, PathColor, false, Duration, 0, DebugLineThickness);
+			DrawDebugLine(World, Top, Back, PathColor, false, Duration, 0, DebugLineThickness);
+			DrawDebugLine(World, Bottom, Left, PathColor, false, Duration, 0, DebugLineThickness);
+			DrawDebugLine(World, Bottom, Right, PathColor, false, Duration, 0, DebugLineThickness);
+			DrawDebugLine(World, Bottom, Front, PathColor, false, Duration, 0, DebugLineThickness);
+			DrawDebugLine(World, Bottom, Back, PathColor, false, Duration, 0, DebugLineThickness);
+
+			// Draw facing direction
+			if (!Location.Facing.IsEmpty())
+			{
+				FVector FacingDir = FVector::ZeroVector;
+				if (Location.Facing == TEXT("north")) FacingDir = FVector(0, -1, 0);
+				else if (Location.Facing == TEXT("south")) FacingDir = FVector(0, 1, 0);
+				else if (Location.Facing == TEXT("east")) FacingDir = FVector(1, 0, 0);
+				else if (Location.Facing == TEXT("west")) FacingDir = FVector(-1, 0, 0);
+
+				if (!FacingDir.IsZero())
+				{
+					DrawDebugDirectionalArrow(World, Pos, Pos + FacingDir * 50.0f, 15.0f, PathColor, false, Duration, 0, DebugLineThickness);
+				}
+			}
+
+			// Label with name and activities
+			FString Label = Location.Name;
+			if (Location.Activities.Num() > 0)
+			{
+				Label += TEXT("\n(") + FString::Join(Location.Activities, TEXT(", ")) + TEXT(")");
+			}
+			DrawDebugString(World, Pos + FVector(0, 0, 50), Label, nullptr, PathColor, Duration, true);
+		}
+
+		// Draw path info label
+		if (Path.Locations.Num() > 0)
+		{
+			FVector LabelPos = GridToWorldPosition2D(Path.Locations[0].X, Path.Locations[0].Y);
+			LabelPos.Z += PathHeight + 90.0f;
+			FString PathLabel = FString::Printf(TEXT("Path: %s"), *Path.Id);
+			if (!Path.NpcId.IsEmpty())
+			{
+				PathLabel += FString::Printf(TEXT(" (NPC: %s)"), *Path.NpcId);
+			}
+			DrawDebugString(World, LabelPos, PathLabel, nullptr, PathColor, Duration, true);
+		}
+	}
+}
+
+void AMapDataImporter::DrawDebugConnections(float Duration) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	float ConnHeight = DebugDrawHeightOffset + 25.0f;
+
+	for (const FMapConnectionData& Connection : ParsedMapData.Connections)
+	{
+		FVector Pos = GridToWorldPosition2D(Connection.X, Connection.Y);
+		Pos.Z += ConnHeight;
+
+		FColor ConnColor;
+		FString TypeLabel;
+
+		if (Connection.Type == TEXT("spawn_point"))
+		{
+			ConnColor = FColor::Green;
+			TypeLabel = TEXT("SPAWN");
+
+			// Draw spawn point as upward arrow
+			DrawDebugDirectionalArrow(World, Pos - FVector(0, 0, 30), Pos + FVector(0, 0, 30), 20.0f, ConnColor, false, Duration, 0, DebugLineThickness * 2.0f);
+		}
+		else if (Connection.Type == TEXT("map_exit"))
+		{
+			ConnColor = FColor::Red;
+			TypeLabel = TEXT("EXIT");
+
+			// Draw exit as outward arrows
+			float Size = 30.0f;
+			DrawDebugBox(World, Pos, FVector(Size, Size, Size * 0.5f), ConnColor, false, Duration, 0, DebugLineThickness * 1.5f);
+		}
+		else if (Connection.Type == TEXT("door"))
+		{
+			ConnColor = FColor(139, 69, 19); // Brown
+			TypeLabel = TEXT("DOOR");
+
+			// Draw door frame
+			float Width = (Connection.Width > 0 ? Connection.Width : 1) * ParsedMapData.Grid.CellSize * GridScale * 0.5f;
+			float Height = 40.0f;
+			DrawDebugBox(World, Pos, FVector(Width, 10.0f, Height), ConnColor, false, Duration, 0, DebugLineThickness * 1.5f);
+		}
+		else
+		{
+			ConnColor = FColor::White;
+			TypeLabel = Connection.Type.ToUpper();
+			DrawDebugSphere(World, Pos, 20.0f, 8, ConnColor, false, Duration, 0, DebugLineThickness);
+		}
+
+		// Draw facing direction
+		if (!Connection.Facing.IsEmpty())
+		{
+			FVector FacingDir = FVector::ZeroVector;
+			if (Connection.Facing == TEXT("north")) FacingDir = FVector(0, -1, 0);
+			else if (Connection.Facing == TEXT("south")) FacingDir = FVector(0, 1, 0);
+			else if (Connection.Facing == TEXT("east")) FacingDir = FVector(1, 0, 0);
+			else if (Connection.Facing == TEXT("west")) FacingDir = FVector(-1, 0, 0);
+
+			if (!FacingDir.IsZero())
+			{
+				DrawDebugDirectionalArrow(World, Pos, Pos + FacingDir * 60.0f, 20.0f, ConnColor, false, Duration, 0, DebugLineThickness);
+			}
+		}
+
+		// Draw label
+		FString Label = FString::Printf(TEXT("[%s] %s"), *TypeLabel, *Connection.Id);
+		if (!Connection.TargetMap.IsEmpty())
+		{
+			Label += FString::Printf(TEXT("\n-> %s"), *Connection.TargetMap);
+			if (!Connection.TargetSpawn.IsEmpty())
+			{
+				Label += FString::Printf(TEXT(":%s"), *Connection.TargetSpawn);
+			}
+		}
+		DrawDebugString(World, Pos + FVector(0, 0, 60), Label, nullptr, ConnColor, Duration, true);
+	}
+}
+
+FColor AMapDataImporter::GetTerrainColor(const FString& TerrainType)
+{
+	if (TerrainType == TEXT("blocked")) return FColor::Red;
+	if (TerrainType == TEXT("water")) return FColor::Blue;
+	if (TerrainType == TEXT("tillable")) return FColor(139, 90, 43); // Brown
+	if (TerrainType == TEXT("path")) return FColor(200, 180, 150); // Tan
+	if (TerrainType == TEXT("sand")) return FColor(238, 214, 175); // Sandy
+	if (TerrainType == TEXT("stone")) return FColor(128, 128, 128); // Gray
+	if (TerrainType == TEXT("wood_floor")) return FColor(139, 90, 43); // Wood brown
+	return FColor(100, 180, 100); // Default green
+}
+
+FColor AMapDataImporter::GetZoneColor(const FString& ZoneType)
+{
+	if (ZoneType == TEXT("bounds")) return FColor::Green;
+	if (ZoneType == TEXT("indoor")) return FColor::Cyan;
+	if (ZoneType == TEXT("fishing")) return FColor::Blue;
+	if (ZoneType == TEXT("forage")) return FColor::Yellow;
+	if (ZoneType == TEXT("restricted")) return FColor::Red;
+	if (ZoneType == TEXT("trigger")) return FColor::Magenta;
+	return FColor::White;
 }

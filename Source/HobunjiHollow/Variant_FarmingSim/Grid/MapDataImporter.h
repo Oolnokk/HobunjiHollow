@@ -40,17 +40,61 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Alignment", meta = (ClampMin = "0.1"))
 	float GridScale = 1.0f;
 
+	/** Rotation of the grid in degrees (yaw rotation around Z axis) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Alignment", meta = (ClampMin = "-180", ClampMax = "180"))
+	float GridRotation = 0.0f;
+
 	/** Whether to automatically spawn objects on BeginPlay */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data")
 	bool bAutoSpawnOnBeginPlay = true;
 
-	/** Whether to draw debug grid in editor */
+	/** Whether to draw debug grid visualization in editor */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Debug")
 	bool bDrawDebugGrid = false;
 
-	/** How many cells to draw for debug visualization */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Debug", meta = (EditCondition = "bDrawDebugGrid", ClampMin = "1"))
-	int32 DebugGridDrawRadius = 10;
+	/** Whether to continuously refresh debug visualization */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Debug", meta = (EditCondition = "bDrawDebugGrid"))
+	bool bContinuousDebugDraw = false;
+
+	/** How many cells to draw for debug visualization (0 = draw entire grid) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Debug", meta = (EditCondition = "bDrawDebugGrid", ClampMin = "0"))
+	int32 DebugGridDrawRadius = 0;
+
+	/** Duration for debug draw lines (seconds) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Debug", meta = (EditCondition = "bDrawDebugGrid", ClampMin = "0.1"))
+	float DebugDrawDuration = 30.0f;
+
+	/** Whether to draw terrain tiles */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Debug|Elements", meta = (EditCondition = "bDrawDebugGrid"))
+	bool bDrawTerrain = true;
+
+	/** Whether to draw zone boundaries */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Debug|Elements", meta = (EditCondition = "bDrawDebugGrid"))
+	bool bDrawZones = true;
+
+	/** Whether to draw roads */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Debug|Elements", meta = (EditCondition = "bDrawDebugGrid"))
+	bool bDrawRoads = true;
+
+	/** Whether to draw NPC paths/schedules */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Debug|Elements", meta = (EditCondition = "bDrawDebugGrid"))
+	bool bDrawPaths = true;
+
+	/** Whether to draw connections (spawn points, map exits) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Debug|Elements", meta = (EditCondition = "bDrawDebugGrid"))
+	bool bDrawConnections = true;
+
+	/** Whether to draw grid cell outlines */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Debug|Elements", meta = (EditCondition = "bDrawDebugGrid"))
+	bool bDrawGridLines = true;
+
+	/** Height offset for debug lines above terrain */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Debug", meta = (EditCondition = "bDrawDebugGrid"))
+	float DebugDrawHeightOffset = 10.0f;
+
+	/** Line thickness for debug visualization */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Debug", meta = (EditCondition = "bDrawDebugGrid", ClampMin = "0.5"))
+	float DebugLineThickness = 2.0f;
 
 	// ---- Import Functions ----
 
@@ -99,13 +143,35 @@ public:
 
 	// ---- Coordinate Helpers ----
 
-	/** Convert grid coordinate to world position (includes height sampling and offset) */
+	/** Convert grid coordinate to world position (includes height sampling, offset, scale, and rotation) */
 	UFUNCTION(BlueprintPure, Category = "Map Data")
 	FVector GridToWorldPosition(const FGridCoordinate& GridPos) const;
 
-	/** Convert grid coordinate to world position (includes height sampling and offset) */
+	/** Convert grid coordinate to world position (includes height sampling, offset, scale, and rotation) */
 	UFUNCTION(BlueprintPure, Category = "Map Data")
 	FVector GridToWorldPosition2D(int32 GridX, int32 GridY) const;
+
+	/** Convert world position back to grid coordinate */
+	UFUNCTION(BlueprintPure, Category = "Map Data")
+	FGridCoordinate WorldToGridPosition(const FVector& WorldPos) const;
+
+	/** Get the full grid transform (offset, scale, rotation) */
+	UFUNCTION(BlueprintPure, Category = "Map Data")
+	FTransform GetGridTransform() const;
+
+	// ---- Debug Visualization ----
+
+	/** Draw all grid visualization data to the viewport */
+	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Map Data|Debug")
+	void DrawAllGridData();
+
+	/** Clear all debug draw lines */
+	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Map Data|Debug")
+	void ClearDebugDraw();
+
+	/** Reimport JSON and redraw debug visualization */
+	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Map Data|Debug")
+	void ReimportAndRedraw();
 
 protected:
 	virtual void BeginPlay() override;
@@ -146,6 +212,38 @@ protected:
 	/** Sample terrain height at grid position */
 	float SampleHeightAtGrid(int32 GridX, int32 GridY) const;
 
+	/** Sample terrain height at world XY position */
+	float SampleHeightAtWorld(float WorldX, float WorldY) const;
+
 	/** Helper to parse properties map from JSON */
 	static TMap<FString, FString> ParsePropertiesObject(const TSharedPtr<FJsonObject>& PropsObject);
+
+	// ---- Debug Drawing Helpers ----
+
+	/** Draw terrain tiles with color-coded types */
+	void DrawDebugTerrain(float Duration) const;
+
+	/** Draw zone boundaries */
+	void DrawDebugZones(float Duration) const;
+
+	/** Draw road network */
+	void DrawDebugRoads(float Duration) const;
+
+	/** Draw NPC paths and schedules */
+	void DrawDebugPaths(float Duration) const;
+
+	/** Draw connections (spawn points, map exits, doors) */
+	void DrawDebugConnections(float Duration) const;
+
+	/** Draw grid cell outlines */
+	void DrawDebugGridLines(float Duration) const;
+
+	/** Get color for terrain type */
+	static FColor GetTerrainColor(const FString& TerrainType);
+
+	/** Get color for zone type */
+	static FColor GetZoneColor(const FString& ZoneType);
+
+	/** Apply grid transform (scale and rotation) to a 2D offset from grid origin */
+	FVector2D ApplyGridTransform2D(float GridX, float GridY) const;
 };
