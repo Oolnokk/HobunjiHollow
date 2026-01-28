@@ -1017,6 +1017,8 @@ void AMapDataImporter::DrawDebugGridLines(float Duration) const
 		return;
 	}
 
+	const float GridScale = GetActorScale3D().X;
+
 	int32 StartX = 0;
 	int32 StartY = 0;
 	int32 EndX = ParsedMapData.Grid.Width;
@@ -1075,6 +1077,8 @@ void AMapDataImporter::DrawDebugTerrain(float Duration) const
 		return;
 	}
 
+	const float GridScale = GetActorScale3D().X;
+
 	// Draw explicit terrain tiles (non-default terrain)
 	for (const FMapTerrainTile& Tile : ParsedMapData.Terrain)
 	{
@@ -1118,6 +1122,8 @@ void AMapDataImporter::DrawDebugZones(float Duration) const
 	{
 		return;
 	}
+
+	const float GridScale = GetActorScale3D().X;
 
 	for (const FMapZoneData& Zone : ParsedMapData.Zones)
 	{
@@ -1370,6 +1376,7 @@ void AMapDataImporter::DrawDebugConnections(float Duration) const
 		return;
 	}
 
+	const float GridScale = GetActorScale3D().X;
 	float ConnHeight = DebugDrawHeightOffset + 25.0f;
 
 	for (const FMapConnectionData& Connection : ParsedMapData.Connections)
