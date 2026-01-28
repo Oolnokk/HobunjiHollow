@@ -3,6 +3,7 @@
 #include "NPCDataComponent.h"
 #include "NPCDataRegistry.h"
 #include "NPCScheduleComponent.h"
+#include "Data/SpeciesDatabase.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
 
@@ -114,14 +115,44 @@ void UNPCDataComponent::ApplyAppearanceToMesh(USkeletalMeshComponent* MeshCompon
 	}
 
 	const FNPCAppearance& Appearance = LoadedData->Appearance;
+	USkeletalMesh* MeshToApply = nullptr;
+	TSubclassOf<UAnimInstance> AnimBPToApply = nullptr;
 
-	// Apply override mesh if specified
+	// Try override mesh first
 	if (!Appearance.OverrideMesh.IsNull())
 	{
-		USkeletalMesh* Mesh = Appearance.OverrideMesh.LoadSynchronous();
-		if (Mesh)
+		MeshToApply = Appearance.OverrideMesh.LoadSynchronous();
+	}
+
+	// If no override mesh, look up from SpeciesDatabase using SpeciesId
+	if (!MeshToApply && !Appearance.SpeciesId.IsEmpty())
+	{
+		FSpeciesData SpeciesData;
+		if (USpeciesDatabase::GetSpeciesData(FName(*Appearance.SpeciesId), SpeciesData))
 		{
-			MeshComponent->SetSkeletalMesh(Mesh);
+			MeshToApply = SpeciesData.GetSkeletalMeshForGender(Appearance.Gender);
+			AnimBPToApply = SpeciesData.AnimationBlueprint;
+
+			UE_LOG(LogTemp, Log, TEXT("NPCDataComponent: Using species mesh for '%s' (Species: %s, Gender: %s)"),
+				*NPCId, *Appearance.SpeciesId,
+				Appearance.Gender == ECharacterGender::Male ? TEXT("Male") : TEXT("Female"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("NPCDataComponent: Species '%s' not found in database for NPC '%s'"),
+				*Appearance.SpeciesId, *NPCId);
+		}
+	}
+
+	// Apply the mesh
+	if (MeshToApply)
+	{
+		MeshComponent->SetSkeletalMesh(MeshToApply);
+
+		// Apply animation blueprint if we got one from species data
+		if (AnimBPToApply)
+		{
+			MeshComponent->SetAnimInstanceClass(AnimBPToApply);
 		}
 	}
 
@@ -153,8 +184,7 @@ void UNPCDataComponent::ApplyAppearanceToMesh(USkeletalMeshComponent* MeshCompon
 		}
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("NPCDataComponent: Applied appearance for '%s' (Species: %s)"),
-		*NPCId, *Appearance.SpeciesId);
+	UE_LOG(LogTemp, Log, TEXT("NPCDataComponent: Applied appearance for '%s'"), *NPCId);
 }
 
 FNPCAppearance UNPCDataComponent::GetAppearance() const

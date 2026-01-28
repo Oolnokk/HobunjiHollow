@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "Grid/GridTypes.h"
+#include "Data/SpeciesDatabase.h"
 #include "NPCCharacterData.generated.h"
 
 class USkeletalMesh;
@@ -255,6 +256,10 @@ struct FNPCAppearance
 	/** Species ID (matches player species system) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance")
 	FString SpeciesId;
+
+	/** Gender (for species mesh selection) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance")
+	ECharacterGender Gender = ECharacterGender::Male;
 
 	/** Primary character color (fur, skin, scales, feathers - depends on species) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Colors")
