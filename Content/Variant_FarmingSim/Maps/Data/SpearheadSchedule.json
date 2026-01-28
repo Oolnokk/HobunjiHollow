@@ -1,0 +1,108 @@
+{
+  "formatVersion": "1.0",
+  "mapId": "village_main",
+  "displayName": "Village with Spearhead Schedule",
+  "metadata": {
+    "author": "Level Designer",
+    "created": "2026-01-27",
+    "description": "Village map with night watchman Spearhead who patrols from 8PM to 8AM"
+  },
+  "grid": {
+    "width": 48,
+    "height": 48,
+    "cellSize": 100,
+    "originOffset": { "x": 0, "y": 0 }
+  },
+  "defaultTerrain": "grass",
+  "layers": {
+    "terrain": [],
+    "objects": [],
+    "zones": [
+      {
+        "id": "playable_area",
+        "type": "bounds",
+        "shape": "rect",
+        "x": 0,
+        "y": 0,
+        "width": 48,
+        "height": 48
+      }
+    ],
+    "spawners": [],
+    "paths": [
+      {
+        "id": "main_road",
+        "type": "road",
+        "bidirectional": true,
+        "waypoints": [
+          { "name": "west_gate", "x": 2, "y": 24 },
+          { "name": "town_square", "x": 24, "y": 24 },
+          { "name": "east_gate", "x": 46, "y": 24 }
+        ]
+      },
+      {
+        "id": "spearhead_patrol",
+        "type": "schedule_points",
+        "npcId": "Spearhead",
+        "locations": [
+          {
+            "name": "spearhead_house_door",
+            "x": 40,
+            "y": 30,
+            "facing": "south",
+            "activities": ["spawn_point", "despawn_point"],
+            "arrivalTolerance": 50
+          },
+          {
+            "name": "east_gate_post",
+            "x": 46,
+            "y": 24,
+            "facing": "east",
+            "activities": ["patrolling", "guarding"],
+            "arrivalTolerance": 50
+          },
+          {
+            "name": "town_square_patrol",
+            "x": 24,
+            "y": 24,
+            "facing": "south",
+            "activities": ["patrolling"],
+            "arrivalTolerance": 50
+          },
+          {
+            "name": "west_gate_post",
+            "x": 2,
+            "y": 24,
+            "facing": "west",
+            "activities": ["patrolling", "guarding"],
+            "arrivalTolerance": 50
+          }
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "id": "default_spawn",
+        "type": "spawn_point",
+        "x": 24,
+        "y": 24,
+        "facing": "south",
+        "properties": {
+          "isDefault": "true"
+        }
+      },
+      {
+        "id": "spearhead_house_door",
+        "type": "door",
+        "x": 40,
+        "y": 30,
+        "facing": "south",
+        "properties": {
+          "npcSpawnPoint": "true",
+          "ownerId": "Spearhead",
+          "description": "Spearhead's house - he exits at 8PM and returns at 8AM"
+        }
+      }
+    ]
+  }
+}
