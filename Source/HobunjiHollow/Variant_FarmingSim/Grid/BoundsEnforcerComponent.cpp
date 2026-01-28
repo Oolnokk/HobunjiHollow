@@ -159,21 +159,55 @@ FVector UBoundsEnforcerComponent::ClampToBounds(const FVector& WorldPosition) co
 		return WorldPosition;
 	}
 
-	float CellSize = GridManager->GetCellSize();
+	// Get grid configuration and transform
 	const FGridConfig& Config = GridManager->GetGridConfig();
+	FVector GridOffset;
+	float GridScale;
+	float GridRotation;
+	GridManager->GetGridTransform(GridOffset, GridScale, GridRotation);
 
-	// Get world-space bounds
-	float MinX = Config.OriginOffset.X + EdgeBuffer;
-	float MinY = Config.OriginOffset.Y + EdgeBuffer;
-	float MaxX = Config.OriginOffset.X + (Config.Width * CellSize) - EdgeBuffer;
-	float MaxY = Config.OriginOffset.Y + (Config.Height * CellSize) - EdgeBuffer;
+	float CellSize = Config.CellSize * GridScale;
 
-	// TODO: If specific bounds zones are defined, use those instead
-	// For now this uses the full grid dimensions
+	// Calculate grid-space bounds
+	float GridMinX = Config.OriginOffset.X * GridScale;
+	float GridMinY = Config.OriginOffset.Y * GridScale;
+	float GridMaxX = GridMinX + (Config.Width * CellSize);
+	float GridMaxY = GridMinY + (Config.Height * CellSize);
+
+	// Convert world position to grid-local space (remove offset, reverse rotation)
+	float LocalX = WorldPosition.X - GridOffset.X;
+	float LocalY = WorldPosition.Y - GridOffset.Y;
+
+	if (!FMath::IsNearlyZero(GridRotation))
+	{
+		float RadAngle = FMath::DegreesToRadians(-GridRotation);
+		float CosAngle = FMath::Cos(RadAngle);
+		float SinAngle = FMath::Sin(RadAngle);
+		float RotatedX = LocalX * CosAngle - LocalY * SinAngle;
+		float RotatedY = LocalX * SinAngle + LocalY * CosAngle;
+		LocalX = RotatedX;
+		LocalY = RotatedY;
+	}
+
+	// Clamp in grid-local space
+	LocalX = FMath::Clamp(LocalX, GridMinX + EdgeBuffer, GridMaxX - EdgeBuffer);
+	LocalY = FMath::Clamp(LocalY, GridMinY + EdgeBuffer, GridMaxY - EdgeBuffer);
+
+	// Convert back to world space (apply rotation, add offset)
+	if (!FMath::IsNearlyZero(GridRotation))
+	{
+		float RadAngle = FMath::DegreesToRadians(GridRotation);
+		float CosAngle = FMath::Cos(RadAngle);
+		float SinAngle = FMath::Sin(RadAngle);
+		float RotatedX = LocalX * CosAngle - LocalY * SinAngle;
+		float RotatedY = LocalX * SinAngle + LocalY * CosAngle;
+		LocalX = RotatedX;
+		LocalY = RotatedY;
+	}
 
 	FVector Clamped = WorldPosition;
-	Clamped.X = FMath::Clamp(Clamped.X, MinX, MaxX);
-	Clamped.Y = FMath::Clamp(Clamped.Y, MinY, MaxY);
+	Clamped.X = LocalX + GridOffset.X;
+	Clamped.Y = LocalY + GridOffset.Y;
 
 	return Clamped;
 }
@@ -185,22 +219,49 @@ void UBoundsEnforcerComponent::DrawDebugBoundsVisualization()
 		return;
 	}
 
-	float CellSize = GridManager->GetCellSize();
+	// Get grid configuration and transform
 	const FGridConfig& Config = GridManager->GetGridConfig();
+	FVector GridOffset;
+	float GridScale;
+	float GridRotation;
+	GridManager->GetGridTransform(GridOffset, GridScale, GridRotation);
 
-	// Calculate corners
-	float MinX = Config.OriginOffset.X;
-	float MinY = Config.OriginOffset.Y;
-	float MaxX = Config.OriginOffset.X + (Config.Width * CellSize);
-	float MaxY = Config.OriginOffset.Y + (Config.Height * CellSize);
+	float CellSize = Config.CellSize * GridScale;
+
+	// Calculate grid-local corners
+	float LocalMinX = Config.OriginOffset.X * GridScale;
+	float LocalMinY = Config.OriginOffset.Y * GridScale;
+	float LocalMaxX = LocalMinX + (Config.Width * CellSize);
+	float LocalMaxY = LocalMinY + (Config.Height * CellSize);
+
+	// Helper lambda to transform local point to world
+	auto LocalToWorld = [&](float LX, float LY) -> FVector2D
+	{
+		if (!FMath::IsNearlyZero(GridRotation))
+		{
+			float RadAngle = FMath::DegreesToRadians(GridRotation);
+			float CosAngle = FMath::Cos(RadAngle);
+			float SinAngle = FMath::Sin(RadAngle);
+			float RotatedX = LX * CosAngle - LY * SinAngle;
+			float RotatedY = LX * SinAngle + LY * CosAngle;
+			return FVector2D(RotatedX + GridOffset.X, RotatedY + GridOffset.Y);
+		}
+		return FVector2D(LX + GridOffset.X, LY + GridOffset.Y);
+	};
+
+	// Transform corners to world space
+	FVector2D C1 = LocalToWorld(LocalMinX, LocalMinY);
+	FVector2D C2 = LocalToWorld(LocalMaxX, LocalMinY);
+	FVector2D C3 = LocalToWorld(LocalMaxX, LocalMaxY);
+	FVector2D C4 = LocalToWorld(LocalMinX, LocalMaxY);
 
 	// Sample height at corners
-	float Z = GetOwner() ? GetOwner()->GetActorLocation().Z + 50.0f : 100.0f;
+	float Z = GetOwner() ? GetOwner()->GetActorLocation().Z + 50.0f : GridOffset.Z + 100.0f;
 
-	FVector Corner1(MinX, MinY, Z);
-	FVector Corner2(MaxX, MinY, Z);
-	FVector Corner3(MaxX, MaxY, Z);
-	FVector Corner4(MinX, MaxY, Z);
+	FVector Corner1(C1.X, C1.Y, Z);
+	FVector Corner2(C2.X, C2.Y, Z);
+	FVector Corner3(C3.X, C3.Y, Z);
+	FVector Corner4(C4.X, C4.Y, Z);
 
 	// Draw bounds rectangle
 	DrawDebugLine(GetWorld(), Corner1, Corner2, DebugBoundsColor, false, -1.0f, 0, 3.0f);
