@@ -203,7 +203,8 @@ AActor* ANPCScheduleSpawner::SpawnNPC(FScheduledNPCState& State)
 		{
 			DataComp->NPCId = State.NpcId;
 			DataComp->DataRegistry = NPCDataRegistry;
-			// Component will load data and apply appearance on next tick
+			// Manually load data since BeginPlay already ran with empty ID
+			DataComp->LoadNPCData();
 		}
 
 		// Configure the schedule component if present
@@ -211,7 +212,8 @@ AActor* ANPCScheduleSpawner::SpawnNPC(FScheduledNPCState& State)
 		{
 			ScheduleComp->NPCId = State.NpcId;
 			ScheduleComp->bAutoLoadFromJSON = true;
-			// Component will load schedule on next tick
+			// Manually load schedule since BeginPlay already ran
+			ScheduleComp->LoadScheduleFromJSON();
 		}
 
 		if (bDebugLogging)
