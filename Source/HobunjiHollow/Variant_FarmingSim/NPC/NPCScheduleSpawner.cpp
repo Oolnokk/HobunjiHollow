@@ -40,9 +40,13 @@ void ANPCScheduleSpawner::BeginPlay()
 		return;
 	}
 
-	// Load schedules and do initial spawn check
+	// Try to load schedules - if none found, will retry on first tick
+	// (MapDataImporter may not have imported JSON yet)
 	LoadSchedules();
-	UpdateNPCStates();
+	if (ScheduledNPCs.Num() > 0)
+	{
+		UpdateNPCStates();
+	}
 }
 
 void ANPCScheduleSpawner::Tick(float DeltaTime)
@@ -53,6 +57,13 @@ void ANPCScheduleSpawner::Tick(float DeltaTime)
 	if (TimeSinceLastCheck >= ScheduleCheckInterval)
 	{
 		TimeSinceLastCheck = 0.0f;
+
+		// If no schedules loaded yet, try again (MapDataImporter may have finished)
+		if (ScheduledNPCs.Num() == 0 && GridManager)
+		{
+			LoadSchedules();
+		}
+
 		UpdateNPCStates();
 	}
 }
