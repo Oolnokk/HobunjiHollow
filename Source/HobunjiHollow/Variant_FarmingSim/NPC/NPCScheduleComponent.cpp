@@ -7,6 +7,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "AIController.h"
+#include "Navigation/PathFollowingComponent.h"
 #include "NavigationSystem.h"
 
 UNPCScheduleComponent::UNPCScheduleComponent()
@@ -528,12 +529,18 @@ void UNPCScheduleComponent::ExecuteMovement(float DeltaTime)
 	{
 		if (AAIController* AIController = Cast<AAIController>(Pawn->GetController()))
 		{
-			// AI controller handles movement, we just monitor arrival
-			return;
+			// Check if AI is actually moving - if not, fall through to direct movement
+			EPathFollowingStatus::Type Status = AIController->GetMoveStatus();
+			if (Status == EPathFollowingStatus::Moving)
+			{
+				// AI controller is handling movement
+				return;
+			}
+			// AI not moving - try to restart or use fallback
 		}
 	}
 
-	// Fallback: simple direct movement
+	// Fallback: simple direct movement (no AI controller or AI not moving)
 	FVector CurrentLoc = Owner->GetActorLocation();
 	FVector Direction = (CurrentTargetPosition - CurrentLoc).GetSafeNormal2D();
 
