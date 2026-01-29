@@ -88,7 +88,8 @@ bool UNPCScheduleComponent::LoadScheduleFromJSON()
 {
 	if (!GridManager || NPCId.IsEmpty())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("NPCScheduleComponent: Cannot load schedule - no GridManager or NPCId"));
+		UE_LOG(LogTemp, Warning, TEXT("NPCScheduleComponent: Cannot load schedule - GridManager=%s, NPCId='%s'"),
+			GridManager ? TEXT("valid") : TEXT("null"), *NPCId);
 		return false;
 	}
 
@@ -96,15 +97,18 @@ bool UNPCScheduleComponent::LoadScheduleFromJSON()
 	FMapPathData ScheduleData;
 	if (!GridManager->GetNPCScheduleData(NPCId, ScheduleData))
 	{
-		UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent: No schedule data found for NPC '%s'"), *NPCId);
+		UE_LOG(LogTemp, Warning, TEXT("NPCScheduleComponent: No schedule data found for NPC '%s' in GridManager"), *NPCId);
 		return false;
 	}
 
 	if (ScheduleData.Locations.Num() == 0)
 	{
-		UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent: No locations in schedule data for NPC '%s'"), *NPCId);
+		UE_LOG(LogTemp, Warning, TEXT("NPCScheduleComponent: No locations in schedule data for NPC '%s'"), *NPCId);
 		return false;
 	}
+
+	UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent: Found %d locations for NPC '%s' (times: %.0f:00 - %.0f:00)"),
+		ScheduleData.Locations.Num(), *NPCId, ScheduleData.StartTime, ScheduleData.EndTime);
 
 	// Create a patrol route from the locations
 	FPatrolRoute PatrolRoute;
@@ -199,6 +203,10 @@ void UNPCScheduleComponent::UpdateSchedule()
 
 	if (ActiveEntry != CurrentScheduleIndex)
 	{
+		UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent '%s': Schedule change %d -> %d (Schedule.Num=%d, TimeManager=%s, Time=%.2f)"),
+			*NPCId, CurrentScheduleIndex, ActiveEntry, Schedule.Num(),
+			TimeManager ? TEXT("valid") : TEXT("null"),
+			TimeManager ? TimeManager->CurrentTime : -1.0f);
 		ActivateScheduleEntry(ActiveEntry);
 	}
 	else if (bIsPatrolling && bHasArrived && WaitTimer <= 0.0f)
