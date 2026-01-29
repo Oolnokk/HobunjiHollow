@@ -133,15 +133,23 @@ void UNPCDataComponent::ApplyAppearanceToMesh(USkeletalMeshComponent* MeshCompon
 			MeshToApply = SpeciesData.GetSkeletalMeshForGender(Appearance.Gender);
 			AnimBPToApply = SpeciesData.AnimationBlueprint;
 
-			UE_LOG(LogTemp, Log, TEXT("NPCDataComponent: Using species mesh for '%s' (Species: %s, Gender: %s)"),
+			UE_LOG(LogTemp, Log, TEXT("NPCDataComponent: Using species mesh for '%s' (Species: %s, Gender: %s, Mesh: %s)"),
 				*NPCId, *Appearance.SpeciesId,
-				Appearance.Gender == ECharacterGender::Male ? TEXT("Male") : TEXT("Female"));
+				Appearance.Gender == ECharacterGender::Male ? TEXT("Male") : TEXT("Female"),
+				MeshToApply ? *MeshToApply->GetName() : TEXT("NULL"));
 		}
 		else
 		{
 			UE_LOG(LogTemp, Warning, TEXT("NPCDataComponent: Species '%s' not found in database for NPC '%s'"),
 				*Appearance.SpeciesId, *NPCId);
 		}
+	}
+	else if (!MeshToApply)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("NPCDataComponent: No mesh source for '%s' (OverrideMesh: %s, SpeciesId: '%s')"),
+			*NPCId,
+			Appearance.OverrideMesh.IsNull() ? TEXT("Null") : TEXT("Set"),
+			*Appearance.SpeciesId);
 	}
 
 	// Apply the mesh

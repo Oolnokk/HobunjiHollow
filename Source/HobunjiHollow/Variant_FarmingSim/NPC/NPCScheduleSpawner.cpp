@@ -145,6 +145,15 @@ void ANPCScheduleSpawner::UpdateNPCStates()
 		// Check if state changed
 		if (bShouldBeActive != State.bShouldBeActive)
 		{
+			UE_LOG(LogTemp, Log, TEXT("NPCScheduleSpawner '%s': State change %s -> %s (Time=%.2f, Range=%.0f-%.0f, Actor=%s)"),
+				*State.NpcId,
+				State.bShouldBeActive ? TEXT("Active") : TEXT("Inactive"),
+				bShouldBeActive ? TEXT("Active") : TEXT("Inactive"),
+				CurrentTime,
+				State.ScheduleData.StartTime,
+				State.ScheduleData.EndTime,
+				IsValid(State.SpawnedActor) ? TEXT("Valid") : TEXT("Null"));
+
 			State.bShouldBeActive = bShouldBeActive;
 
 			if (bShouldBeActive)
@@ -152,6 +161,7 @@ void ANPCScheduleSpawner::UpdateNPCStates()
 				// Time to spawn
 				if (!State.SpawnedActor)
 				{
+					UE_LOG(LogTemp, Log, TEXT("NPCScheduleSpawner '%s': Spawning NPC"), *State.NpcId);
 					SpawnNPC(State);
 				}
 			}
@@ -160,6 +170,7 @@ void ANPCScheduleSpawner::UpdateNPCStates()
 				// Time to despawn
 				if (State.SpawnedActor)
 				{
+					UE_LOG(LogTemp, Log, TEXT("NPCScheduleSpawner '%s': Despawning NPC"), *State.NpcId);
 					DespawnNPC(State);
 				}
 			}
@@ -168,6 +179,7 @@ void ANPCScheduleSpawner::UpdateNPCStates()
 		// Check if actor was destroyed externally
 		if (State.bShouldBeActive && !IsValid(State.SpawnedActor))
 		{
+			UE_LOG(LogTemp, Warning, TEXT("NPCScheduleSpawner '%s': Actor was destroyed externally, respawning"), *State.NpcId);
 			State.SpawnedActor = nullptr;
 			SpawnNPC(State);
 		}
