@@ -17,6 +17,13 @@ void ANPCScheduleSpawner::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// Only server should spawn/manage NPCs
+	if (!HasAuthority())
+	{
+		SetActorTickEnabled(false);
+		return;
+	}
+
 	// Get grid manager
 	if (UWorld* World = GetWorld())
 	{
