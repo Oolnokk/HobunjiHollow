@@ -6,10 +6,34 @@
 #include "Data/SpeciesDatabase.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
+#include "Net/UnrealNetwork.h"
 
 UNPCDataComponent::UNPCDataComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
+	SetIsReplicatedByDefault(true);
+}
+
+void UNPCDataComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(UNPCDataComponent, NPCId);
+	DOREPLIFETIME(UNPCDataComponent, DataRegistry);
+}
+
+void UNPCDataComponent::OnRep_NPCId()
+{
+	UE_LOG(LogTemp, Log, TEXT("NPCDataComponent::OnRep_NPCId '%s': Received NPCId on client (DataRegistry=%s, LoadedData=%s)"),
+		*NPCId,
+		DataRegistry ? TEXT("Valid") : TEXT("Null"),
+		LoadedData ? TEXT("Valid") : TEXT("Null"));
+
+	if (!NPCId.IsEmpty() && !LoadedData)
+	{
+		bool bSuccess = LoadNPCData();
+		UE_LOG(LogTemp, Log, TEXT("NPCDataComponent::OnRep_NPCId '%s': LoadNPCData returned %s"),
+			*NPCId, bSuccess ? TEXT("true") : TEXT("false"));
+	}
 }
 
 void UNPCDataComponent::BeginPlay()
