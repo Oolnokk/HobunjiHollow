@@ -99,6 +99,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "NPC Data")
 	bool LoadNPCData();
 
+	/** Multicast RPC to apply appearance on all clients */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_ApplyAppearance();
+
 	/** Load NPC data for a specific ID */
 	UFUNCTION(BlueprintCallable, Category = "NPC Data")
 	bool LoadNPCDataById(const FString& Id);

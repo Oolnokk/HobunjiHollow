@@ -63,10 +63,13 @@ void UNPCScheduleComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 	// Handle waiting at waypoint
 	if (bHasArrived && bIsPatrolling && WaitTimer > 0.0f)
 	{
+		float OldTimer = WaitTimer;
 		WaitTimer -= DeltaTime;
 		if (WaitTimer <= 0.0f)
 		{
 			WaitTimer = 0.0f;
+			UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent '%s': Wait complete (was %.2fs), advancing to next waypoint"),
+				*NPCId, OldTimer);
 			AdvancePatrolWaypoint();
 		}
 		return;
@@ -396,6 +399,9 @@ void UNPCScheduleComponent::ActivateScheduleEntry(int32 EntryIndex)
 
 void UNPCScheduleComponent::AdvancePatrolWaypoint()
 {
+	UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent '%s': AdvancePatrolWaypoint called (bIsPatrolling=%s, CurrentScheduleIndex=%d)"),
+		*NPCId, bIsPatrolling ? TEXT("true") : TEXT("false"), CurrentScheduleIndex);
+
 	if (!bIsPatrolling || CurrentScheduleIndex < 0)
 	{
 		return;
@@ -405,21 +411,28 @@ void UNPCScheduleComponent::AdvancePatrolWaypoint()
 	FPatrolRoute Route;
 	if (!GetPatrolRoute(Entry.PatrolRouteId, Route) || Route.Waypoints.Num() == 0)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("NPCScheduleComponent '%s': No patrol route found for '%s'"),
+			*NPCId, *Entry.PatrolRouteId);
 		return;
 	}
 
 	// Move to next waypoint
 	CurrentPatrolWaypointIndex++;
 
+	UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent '%s': Advancing to waypoint %d/%d"),
+		*NPCId, CurrentPatrolWaypointIndex, Route.Waypoints.Num());
+
 	if (CurrentPatrolWaypointIndex >= Route.Waypoints.Num())
 	{
 		if (Route.bLooping)
 		{
 			CurrentPatrolWaypointIndex = 0;
+			UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent '%s': Looping back to waypoint 0"), *NPCId);
 		}
 		else
 		{
 			// Patrol complete
+			UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent '%s': Patrol complete, stopping"), *NPCId);
 			bIsPatrolling = false;
 			bIsMoving = false;
 			return;
@@ -431,6 +444,9 @@ void UNPCScheduleComponent::AdvancePatrolWaypoint()
 	CurrentTargetFacing = Waypoint.Facing;
 	CurrentArrivalTolerance = Waypoint.ArrivalTolerance;
 	bHasArrived = false;
+
+	UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent '%s': Moving to waypoint '%s' at (%f, %f, %f)"),
+		*NPCId, *Waypoint.Name, CurrentTargetPosition.X, CurrentTargetPosition.Y, CurrentTargetPosition.Z);
 
 	MoveToPosition(CurrentTargetPosition, CurrentArrivalTolerance);
 }
