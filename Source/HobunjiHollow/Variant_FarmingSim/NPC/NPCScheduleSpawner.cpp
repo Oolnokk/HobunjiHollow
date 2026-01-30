@@ -228,13 +228,29 @@ AActor* ANPCScheduleSpawner::SpawnNPC(FScheduledNPCState& State)
 	{
 		State.SpawnedActor = SpawnedActor;
 
+		UE_LOG(LogTemp, Log, TEXT("NPCScheduleSpawner: Actor spawned '%s' at location (%f, %f, %f), Class: %s"),
+			*State.NpcId, SpawnLocation.X, SpawnLocation.Y, SpawnLocation.Z,
+			*NPCClass->GetName());
+
+		// Ensure the actor is visible
+		SpawnedActor->SetActorHiddenInGame(false);
+
 		// Configure the data component if present
-		if (UNPCDataComponent* DataComp = SpawnedActor->FindComponentByClass<UNPCDataComponent>())
+		UNPCDataComponent* DataComp = SpawnedActor->FindComponentByClass<UNPCDataComponent>();
+		if (DataComp)
 		{
+			UE_LOG(LogTemp, Log, TEXT("NPCScheduleSpawner '%s': Found NPCDataComponent, setting NPCId and loading data"),
+				*State.NpcId);
 			DataComp->NPCId = State.NpcId;
 			DataComp->DataRegistry = NPCDataRegistry;
 			// Manually load data since BeginPlay already ran with empty ID
-			DataComp->LoadNPCData();
+			bool bLoadResult = DataComp->LoadNPCData();
+			UE_LOG(LogTemp, Log, TEXT("NPCScheduleSpawner '%s': LoadNPCData returned %s"),
+				*State.NpcId, bLoadResult ? TEXT("true") : TEXT("false"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("NPCScheduleSpawner '%s': No NPCDataComponent found on actor!"), *State.NpcId);
 		}
 
 		// Configure the schedule component if present
@@ -244,7 +260,20 @@ AActor* ANPCScheduleSpawner::SpawnNPC(FScheduledNPCState& State)
 			ScheduleComp->bAutoLoadFromJSON = true;
 			// Manually load schedule since BeginPlay already ran
 			ScheduleComp->LoadScheduleFromJSON();
+			UE_LOG(LogTemp, Log, TEXT("NPCScheduleSpawner '%s': Configured schedule component"), *State.NpcId);
 		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("NPCScheduleSpawner '%s': No NPCScheduleComponent found on actor!"), *State.NpcId);
+		}
+
+		// Log final actor state
+		UE_LOG(LogTemp, Log, TEXT("NPCScheduleSpawner '%s': Spawn complete - Actor Hidden: %s, Location: (%f, %f, %f)"),
+			*State.NpcId,
+			SpawnedActor->IsHidden() ? TEXT("Yes") : TEXT("No"),
+			SpawnedActor->GetActorLocation().X,
+			SpawnedActor->GetActorLocation().Y,
+			SpawnedActor->GetActorLocation().Z);
 
 		if (bDebugLogging)
 		{
@@ -253,6 +282,10 @@ AActor* ANPCScheduleSpawner::SpawnNPC(FScheduledNPCState& State)
 		}
 
 		OnNPCSpawned.Broadcast(State.NpcId, SpawnedActor);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("NPCScheduleSpawner: Failed to spawn actor for '%s'!"), *State.NpcId);
 	}
 
 	return SpawnedActor;
