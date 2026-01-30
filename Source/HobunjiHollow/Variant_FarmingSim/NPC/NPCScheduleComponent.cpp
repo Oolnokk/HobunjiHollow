@@ -47,6 +47,13 @@ void UNPCScheduleComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
+	// Only tick on server (movement is server-authoritative)
+	AActor* Owner = GetOwner();
+	if (!Owner || !Owner->HasAuthority())
+	{
+		return;
+	}
+
 	if (!bScheduleActive)
 	{
 		return;
@@ -65,6 +72,16 @@ void UNPCScheduleComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 	{
 		float OldTimer = WaitTimer;
 		WaitTimer -= DeltaTime;
+
+		// Log every 0.5 seconds while waiting
+		static float WaitLogTimer = 0.0f;
+		WaitLogTimer += DeltaTime;
+		if (WaitLogTimer >= 0.5f)
+		{
+			WaitLogTimer = 0.0f;
+			UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent '%s': Waiting... WaitTimer=%.2f"), *NPCId, WaitTimer);
+		}
+
 		if (WaitTimer <= 0.0f)
 		{
 			WaitTimer = 0.0f;
@@ -73,6 +90,20 @@ void UNPCScheduleComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 			AdvancePatrolWaypoint();
 		}
 		return;
+	}
+
+	// Debug: Log if we're not in wait state but should be moving
+	static float DebugLogTimer = 0.0f;
+	DebugLogTimer += DeltaTime;
+	if (DebugLogTimer > 5.0f && bIsPatrolling)
+	{
+		DebugLogTimer = 0.0f;
+		UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent '%s': Tick state - bIsMoving=%s, bHasArrived=%s, bIsPatrolling=%s, WaitTimer=%.2f"),
+			*NPCId,
+			bIsMoving ? TEXT("true") : TEXT("false"),
+			bHasArrived ? TEXT("true") : TEXT("false"),
+			bIsPatrolling ? TEXT("true") : TEXT("false"),
+			WaitTimer);
 	}
 
 	// Execute movement if we have a target
