@@ -68,6 +68,20 @@ void UFarmGridManager::InitializeFromMapData(const FMapData& MapData)
 	Spawners = MapData.Spawners;
 }
 
+void UFarmGridManager::SetGridTransform(const FVector& Offset, float Scale, float RotationDegrees)
+{
+	GridWorldOffset = Offset;
+	GridScaleFactor = FMath::Max(0.1f, Scale);
+	GridRotationDegrees = RotationDegrees;
+}
+
+void UFarmGridManager::GetGridTransform(FVector& OutOffset, float& OutScale, float& OutRotation) const
+{
+	OutOffset = GridWorldOffset;
+	OutScale = GridScaleFactor;
+	OutRotation = GridRotationDegrees;
+}
+
 void UFarmGridManager::ClearGrid()
 {
 	GridCells.Empty();
@@ -81,17 +95,78 @@ void UFarmGridManager::ClearGrid()
 
 FGridCoordinate UFarmGridManager::WorldToGrid(const FVector& WorldPosition) const
 {
-	return UGridFunctionLibrary::WorldToGrid(WorldPosition, GridConfig.CellSize, GridConfig.OriginOffset);
+	// Remove world offset
+	float LocalX = WorldPosition.X - GridWorldOffset.X;
+	float LocalY = WorldPosition.Y - GridWorldOffset.Y;
+
+	// Reverse rotation if applied
+	if (!FMath::IsNearlyZero(GridRotationDegrees))
+	{
+		FVector2D Reversed = ReverseGridTransform(LocalX, LocalY);
+		LocalX = Reversed.X;
+		LocalY = Reversed.Y;
+	}
+
+	return UGridFunctionLibrary::WorldToGrid(FVector(LocalX, LocalY, WorldPosition.Z), GridConfig.CellSize * GridScaleFactor, GridConfig.OriginOffset);
 }
 
 FVector UFarmGridManager::GridToWorld(const FGridCoordinate& GridPos) const
 {
-	return UGridFunctionLibrary::GridToWorld(GridPos, GridConfig.CellSize, GridConfig.OriginOffset);
+	// Get base position with scale
+	FVector BasePos = UGridFunctionLibrary::GridToWorld(GridPos, GridConfig.CellSize * GridScaleFactor, GridConfig.OriginOffset);
+
+	// Apply rotation if set
+	if (!FMath::IsNearlyZero(GridRotationDegrees))
+	{
+		FVector2D Transformed = ApplyGridTransform(BasePos.X - GridConfig.OriginOffset.X, BasePos.Y - GridConfig.OriginOffset.Y);
+		BasePos.X = Transformed.X + GridConfig.OriginOffset.X;
+		BasePos.Y = Transformed.Y + GridConfig.OriginOffset.Y;
+	}
+
+	// Apply world offset
+	BasePos += GridWorldOffset;
+
+	return BasePos;
 }
 
 FVector UFarmGridManager::SnapToGrid(const FVector& WorldPosition) const
 {
-	return UGridFunctionLibrary::SnapToGrid(WorldPosition, GridConfig.CellSize, GridConfig.OriginOffset);
+	FGridCoordinate GridCoord = WorldToGrid(WorldPosition);
+	return GridToWorld(GridCoord);
+}
+
+FVector2D UFarmGridManager::ApplyGridTransform(float X, float Y) const
+{
+	if (FMath::IsNearlyZero(GridRotationDegrees))
+	{
+		return FVector2D(X, Y);
+	}
+
+	float RadAngle = FMath::DegreesToRadians(GridRotationDegrees);
+	float CosAngle = FMath::Cos(RadAngle);
+	float SinAngle = FMath::Sin(RadAngle);
+
+	return FVector2D(
+		X * CosAngle - Y * SinAngle,
+		X * SinAngle + Y * CosAngle
+	);
+}
+
+FVector2D UFarmGridManager::ReverseGridTransform(float X, float Y) const
+{
+	if (FMath::IsNearlyZero(GridRotationDegrees))
+	{
+		return FVector2D(X, Y);
+	}
+
+	float RadAngle = FMath::DegreesToRadians(-GridRotationDegrees);
+	float CosAngle = FMath::Cos(RadAngle);
+	float SinAngle = FMath::Sin(RadAngle);
+
+	return FVector2D(
+		X * CosAngle - Y * SinAngle,
+		X * SinAngle + Y * CosAngle
+	);
 }
 
 FVector UFarmGridManager::GridToWorldWithHeight(const FGridCoordinate& GridPos) const
@@ -448,6 +523,34 @@ TArray<FMapScheduleLocation> UFarmGridManager::GetNPCScheduleLocations(const FSt
 		if (Path.IsNPCSchedule() && Path.NpcId == NpcId)
 		{
 			Result.Append(Path.Locations);
+		}
+	}
+
+	return Result;
+}
+
+bool UFarmGridManager::GetNPCScheduleData(const FString& NpcId, FMapPathData& OutScheduleData) const
+{
+	for (const FMapPathData& Path : Paths)
+	{
+		if (Path.IsNPCSchedule() && Path.NpcId == NpcId)
+		{
+			OutScheduleData = Path;
+			return true;
+		}
+	}
+	return false;
+}
+
+TArray<FMapPathData> UFarmGridManager::GetAllNPCSchedules() const
+{
+	TArray<FMapPathData> Result;
+
+	for (const FMapPathData& Path : Paths)
+	{
+		if (Path.IsNPCSchedule())
+		{
+			Result.Add(Path);
 		}
 	}
 

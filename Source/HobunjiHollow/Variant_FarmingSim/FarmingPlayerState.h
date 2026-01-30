@@ -19,8 +19,7 @@ enum class EFarmingPlayerRole : uint8
 };
 
 // Use shared FNPCRelationship struct from NPCRelationshipTypes.h
-// Legacy typedef for backwards compatibility
-typedef FNPCRelationship FPlayerNPCRelationship;
+// Note: Using FNPCRelationship directly as typedefs don't work with UHT UPROPERTY
 
 /**
  * Player state for farming simulation
@@ -48,15 +47,15 @@ public:
 
 	/** Per-player NPC relationships */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Farming|NPCs")
-	TArray<FPlayerNPCRelationship> NPCRelationships;
+	TArray<FNPCRelationship> NPCRelationships;
 
 	/** Get relationship data for an NPC (server and client) */
 	UFUNCTION(BlueprintCallable, Category = "Farming|NPCs")
-	bool GetNPCRelationship(FName NPCID, FPlayerNPCRelationship& OutRelationship) const;
+	bool GetNPCRelationship(FName NPCID, FNPCRelationship& OutRelationship) const;
 
 	/** Set or update relationship data for an NPC (server only) */
 	UFUNCTION(BlueprintCallable, Category = "Farming|NPCs")
-	void SetNPCRelationship(const FPlayerNPCRelationship& Relationship);
+	void SetNPCRelationship(const FNPCRelationship& Relationship);
 
 	/** Server: Set player role */
 	UFUNCTION(BlueprintCallable, Category = "Farming|Player")

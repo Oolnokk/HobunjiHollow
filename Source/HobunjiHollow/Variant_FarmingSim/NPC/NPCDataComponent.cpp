@@ -3,12 +3,37 @@
 #include "NPCDataComponent.h"
 #include "NPCDataRegistry.h"
 #include "NPCScheduleComponent.h"
+#include "Data/SpeciesDatabase.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
+#include "Net/UnrealNetwork.h"
 
 UNPCDataComponent::UNPCDataComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
+	SetIsReplicatedByDefault(true);
+}
+
+void UNPCDataComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(UNPCDataComponent, NPCId);
+	DOREPLIFETIME(UNPCDataComponent, DataRegistry);
+}
+
+void UNPCDataComponent::OnRep_NPCId()
+{
+	UE_LOG(LogTemp, Log, TEXT("NPCDataComponent::OnRep_NPCId '%s': Received NPCId on client (DataRegistry=%s, LoadedData=%s)"),
+		*NPCId,
+		DataRegistry ? TEXT("Valid") : TEXT("Null"),
+		LoadedData ? TEXT("Valid") : TEXT("Null"));
+
+	if (!NPCId.IsEmpty() && !LoadedData)
+	{
+		bool bSuccess = LoadNPCData();
+		UE_LOG(LogTemp, Log, TEXT("NPCDataComponent::OnRep_NPCId '%s': LoadNPCData returned %s"),
+			*NPCId, bSuccess ? TEXT("true") : TEXT("false"));
+	}
 }
 
 void UNPCDataComponent::BeginPlay()
@@ -44,7 +69,7 @@ bool UNPCDataComponent::LoadNPCData()
 			CurrentAffection = LoadedData->RelationshipConfig.StartingAffection;
 		}
 
-		// Apply appearance
+		// Apply appearance locally
 		if (bAutoApplyAppearance)
 		{
 			ApplyAppearance();
@@ -56,6 +81,14 @@ bool UNPCDataComponent::LoadNPCData()
 			ConfigureScheduleComponent();
 		}
 
+		// If we're on the server, multicast to apply appearance on all clients
+		AActor* Owner = GetOwner();
+		if (Owner && Owner->HasAuthority() && bAutoApplyAppearance)
+		{
+			UE_LOG(LogTemp, Log, TEXT("NPCDataComponent '%s': Server calling Multicast_ApplyAppearance"), *NPCId);
+			Multicast_ApplyAppearance();
+		}
+
 		OnDataLoaded.Broadcast(LoadedData);
 
 		UE_LOG(LogTemp, Log, TEXT("NPCDataComponent: Loaded data for '%s'"), *NPCId);
@@ -64,6 +97,36 @@ bool UNPCDataComponent::LoadNPCData()
 
 	UE_LOG(LogTemp, Warning, TEXT("NPCDataComponent: Failed to load data for '%s'"), *NPCId);
 	return false;
+}
+
+void UNPCDataComponent::Multicast_ApplyAppearance_Implementation()
+{
+	UE_LOG(LogTemp, Log, TEXT("NPCDataComponent::Multicast_ApplyAppearance '%s': Received on %s"),
+		*NPCId,
+		GetOwner() && GetOwner()->HasAuthority() ? TEXT("Server") : TEXT("Client"));
+
+	// On clients, we need to load data first if not already loaded
+	if (!LoadedData)
+	{
+		// Try direct asset reference
+		if (NPCDataAsset)
+		{
+			LoadedData = NPCDataAsset;
+		}
+		// Try registry lookup
+		else if (!NPCId.IsEmpty() && DataRegistry)
+		{
+			LoadedData = DataRegistry->GetNPCData(NPCId);
+		}
+
+		if (!LoadedData)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("NPCDataComponent::Multicast_ApplyAppearance '%s': Failed to load data on client"), *NPCId);
+			return;
+		}
+	}
+
+	ApplyAppearance();
 }
 
 bool UNPCDataComponent::LoadNPCDataById(const FString& Id)
@@ -77,12 +140,14 @@ void UNPCDataComponent::ApplyAppearance()
 {
 	if (!LoadedData)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("NPCDataComponent::ApplyAppearance '%s': No loaded data"), *NPCId);
 		return;
 	}
 
 	AActor* Owner = GetOwner();
 	if (!Owner)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("NPCDataComponent::ApplyAppearance '%s': No owner"), *NPCId);
 		return;
 	}
 
@@ -93,16 +158,29 @@ void UNPCDataComponent::ApplyAppearance()
 	if (ACharacter* Character = Cast<ACharacter>(Owner))
 	{
 		MeshComponent = Character->GetMesh();
+		UE_LOG(LogTemp, Log, TEXT("NPCDataComponent::ApplyAppearance '%s': Found Character mesh component (Visible=%s, Hidden=%s)"),
+			*NPCId,
+			MeshComponent && MeshComponent->IsVisible() ? TEXT("Yes") : TEXT("No"),
+			MeshComponent && MeshComponent->bHiddenInGame ? TEXT("Yes") : TEXT("No"));
 	}
 	else
 	{
 		// Find first skeletal mesh component
 		MeshComponent = Owner->FindComponentByClass<USkeletalMeshComponent>();
+		UE_LOG(LogTemp, Log, TEXT("NPCDataComponent::ApplyAppearance '%s': Found generic mesh component (Visible=%s, Hidden=%s)"),
+			*NPCId,
+			MeshComponent && MeshComponent->IsVisible() ? TEXT("Yes") : TEXT("No"),
+			MeshComponent && MeshComponent->bHiddenInGame ? TEXT("Yes") : TEXT("No"));
 	}
 
 	if (MeshComponent)
 	{
 		ApplyAppearanceToMesh(MeshComponent);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("NPCDataComponent::ApplyAppearance '%s': No mesh component found on owner '%s'"),
+			*NPCId, *Owner->GetName());
 	}
 }
 
@@ -110,19 +188,88 @@ void UNPCDataComponent::ApplyAppearanceToMesh(USkeletalMeshComponent* MeshCompon
 {
 	if (!LoadedData || !MeshComponent)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("NPCDataComponent::ApplyAppearanceToMesh '%s': LoadedData=%s, MeshComponent=%s"),
+			*NPCId, LoadedData ? TEXT("Valid") : TEXT("Null"), MeshComponent ? TEXT("Valid") : TEXT("Null"));
 		return;
 	}
 
 	const FNPCAppearance& Appearance = LoadedData->Appearance;
+	USkeletalMesh* MeshToApply = nullptr;
+	TSubclassOf<UAnimInstance> AnimBPToApply = nullptr;
 
-	// Apply override mesh if specified
+	UE_LOG(LogTemp, Log, TEXT("NPCDataComponent::ApplyAppearanceToMesh '%s': SpeciesId='%s', Gender=%s, OverrideMesh=%s"),
+		*NPCId, *Appearance.SpeciesId,
+		Appearance.Gender == ECharacterGender::Male ? TEXT("Male") : TEXT("Female"),
+		Appearance.OverrideMesh.IsNull() ? TEXT("Null") : TEXT("Set"));
+
+	// Try override mesh first
 	if (!Appearance.OverrideMesh.IsNull())
 	{
-		USkeletalMesh* Mesh = Appearance.OverrideMesh.LoadSynchronous();
-		if (Mesh)
+		MeshToApply = Appearance.OverrideMesh.LoadSynchronous();
+		UE_LOG(LogTemp, Log, TEXT("NPCDataComponent '%s': Loaded override mesh: %s"),
+			*NPCId, MeshToApply ? *MeshToApply->GetName() : TEXT("FAILED"));
+	}
+
+	// If no override mesh, look up from SpeciesDatabase using SpeciesId
+	if (!MeshToApply && !Appearance.SpeciesId.IsEmpty())
+	{
+		FSpeciesData SpeciesData;
+		if (USpeciesDatabase::GetSpeciesData(FName(*Appearance.SpeciesId), SpeciesData))
 		{
-			MeshComponent->SetSkeletalMesh(Mesh);
+			MeshToApply = SpeciesData.GetSkeletalMeshForGender(Appearance.Gender);
+			AnimBPToApply = SpeciesData.AnimationBlueprint;
+
+			UE_LOG(LogTemp, Log, TEXT("NPCDataComponent '%s': Using species mesh (Species: %s, Gender: %s, Mesh: %s, AnimBP: %s)"),
+				*NPCId, *Appearance.SpeciesId,
+				Appearance.Gender == ECharacterGender::Male ? TEXT("Male") : TEXT("Female"),
+				MeshToApply ? *MeshToApply->GetName() : TEXT("NULL"),
+				AnimBPToApply ? *AnimBPToApply->GetName() : TEXT("NULL"));
 		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("NPCDataComponent '%s': Species '%s' not found in database"),
+				*NPCId, *Appearance.SpeciesId);
+		}
+	}
+	else if (!MeshToApply)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("NPCDataComponent '%s': No mesh source (OverrideMesh: %s, SpeciesId: '%s')"),
+			*NPCId,
+			Appearance.OverrideMesh.IsNull() ? TEXT("Null") : TEXT("Set"),
+			*Appearance.SpeciesId);
+	}
+
+	// Apply the mesh
+	if (MeshToApply)
+	{
+		USkeletalMesh* OldMesh = MeshComponent->GetSkeletalMeshAsset();
+		MeshComponent->SetSkeletalMesh(MeshToApply);
+
+		UE_LOG(LogTemp, Log, TEXT("NPCDataComponent '%s': Applied mesh (Old: %s, New: %s, Component Visible: %s, Hidden: %s)"),
+			*NPCId,
+			OldMesh ? *OldMesh->GetName() : TEXT("None"),
+			MeshToApply ? *MeshToApply->GetName() : TEXT("None"),
+			MeshComponent->IsVisible() ? TEXT("Yes") : TEXT("No"),
+			MeshComponent->bHiddenInGame ? TEXT("Yes") : TEXT("No"));
+
+		// Ensure the mesh component is visible
+		if (!MeshComponent->IsVisible() || MeshComponent->bHiddenInGame)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("NPCDataComponent '%s': Mesh was hidden, making visible"), *NPCId);
+			MeshComponent->SetVisibility(true);
+			MeshComponent->SetHiddenInGame(false);
+		}
+
+		// Apply animation blueprint if we got one from species data
+		if (AnimBPToApply)
+		{
+			MeshComponent->SetAnimInstanceClass(AnimBPToApply);
+			UE_LOG(LogTemp, Log, TEXT("NPCDataComponent '%s': Applied AnimBP: %s"), *NPCId, *AnimBPToApply->GetName());
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("NPCDataComponent '%s': No mesh to apply!"), *NPCId);
 	}
 
 	// Apply height scale
@@ -153,8 +300,7 @@ void UNPCDataComponent::ApplyAppearanceToMesh(USkeletalMeshComponent* MeshCompon
 		}
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("NPCDataComponent: Applied appearance for '%s' (Species: %s)"),
-		*NPCId, *Appearance.SpeciesId);
+	UE_LOG(LogTemp, Log, TEXT("NPCDataComponent: Applied appearance for '%s'"), *NPCId);
 }
 
 FNPCAppearance UNPCDataComponent::GetAppearance() const

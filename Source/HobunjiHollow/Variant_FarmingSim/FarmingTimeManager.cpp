@@ -28,10 +28,17 @@ void AFarmingTimeManager::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	// Only update time on server
-	if (!HasAuthority())
+	// In networked games, only the server/host updates time
+	// In standalone/PIE single player, always update
+	UWorld* World = GetWorld();
+	if (World)
 	{
-		return;
+		ENetMode NetMode = World->GetNetMode();
+		// Only skip if we're a pure client in a networked game
+		if (NetMode == NM_Client)
+		{
+			return;
+		}
 	}
 
 	if (!bTimePaused)

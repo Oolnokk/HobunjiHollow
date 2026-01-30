@@ -31,6 +31,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Grid")
 	void InitializeFromMapData(const FMapData& MapData);
 
+	/** Set the grid transform (offset, scale, rotation) for coordinate conversions */
+	UFUNCTION(BlueprintCallable, Category = "Grid")
+	void SetGridTransform(const FVector& Offset, float Scale, float RotationDegrees);
+
+	/** Get the current grid transform */
+	UFUNCTION(BlueprintPure, Category = "Grid")
+	void GetGridTransform(FVector& OutOffset, float& OutScale, float& OutRotation) const;
+
 	/** Clear all grid data */
 	UFUNCTION(BlueprintCallable, Category = "Grid")
 	void ClearGrid();
@@ -160,6 +168,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Grid")
 	TArray<FMapScheduleLocation> GetNPCScheduleLocations(const FString& NpcId) const;
 
+	/** Get full NPC schedule data including times */
+	UFUNCTION(BlueprintPure, Category = "Grid")
+	bool GetNPCScheduleData(const FString& NpcId, FMapPathData& OutScheduleData) const;
+
+	/** Get all NPC schedules */
+	UFUNCTION(BlueprintPure, Category = "Grid")
+	TArray<FMapPathData> GetAllNPCSchedules() const;
+
 	// ---- Road Network ----
 
 	/** Get all roads in the map */
@@ -231,6 +247,18 @@ protected:
 	UPROPERTY()
 	FGridConfig GridConfig;
 
+	/** Additional world offset for grid alignment */
+	UPROPERTY()
+	FVector GridWorldOffset = FVector::ZeroVector;
+
+	/** Scale factor for grid (1.0 = default, uses CellSize directly) */
+	UPROPERTY()
+	float GridScaleFactor = 1.0f;
+
+	/** Rotation of grid in degrees (yaw) */
+	UPROPERTY()
+	float GridRotationDegrees = 0.0f;
+
 	/** Sparse storage of modified grid cells */
 	UPROPERTY()
 	TMap<FGridCoordinate, FGridCell> GridCells;
@@ -261,4 +289,10 @@ protected:
 
 	/** Get or create a cell at coordinate */
 	FGridCell& GetOrCreateCell(const FGridCoordinate& Coord);
+
+	/** Apply grid transform (scale and rotation) to a position relative to grid origin */
+	FVector2D ApplyGridTransform(float GridX, float GridY) const;
+
+	/** Reverse grid transform to convert world position back to grid-relative */
+	FVector2D ReverseGridTransform(float WorldX, float WorldY) const;
 };

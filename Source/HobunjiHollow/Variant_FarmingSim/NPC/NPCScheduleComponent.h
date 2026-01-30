@@ -27,7 +27,7 @@ struct FPatrolWaypoint
 	FGridCoordinate GridPosition;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Patrol")
-	FVector WorldPosition;
+	FVector WorldPosition = FVector::ZeroVector;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Patrol")
 	EGridDirection Facing = EGridDirection::South;

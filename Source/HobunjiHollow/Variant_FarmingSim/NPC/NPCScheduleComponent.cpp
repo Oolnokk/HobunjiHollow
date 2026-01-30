@@ -7,6 +7,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "AIController.h"
+#include "Navigation/PathFollowingComponent.h"
 #include "NavigationSystem.h"
 
 UNPCScheduleComponent::UNPCScheduleComponent()
@@ -46,6 +47,13 @@ void UNPCScheduleComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
+	// Only tick on server (movement is server-authoritative)
+	AActor* Owner = GetOwner();
+	if (!Owner || !Owner->HasAuthority())
+	{
+		return;
+	}
+
 	if (!bScheduleActive)
 	{
 		return;
@@ -62,13 +70,40 @@ void UNPCScheduleComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 	// Handle waiting at waypoint
 	if (bHasArrived && bIsPatrolling && WaitTimer > 0.0f)
 	{
+		float OldTimer = WaitTimer;
 		WaitTimer -= DeltaTime;
+
+		// Log every 0.5 seconds while waiting
+		static float WaitLogTimer = 0.0f;
+		WaitLogTimer += DeltaTime;
+		if (WaitLogTimer >= 0.5f)
+		{
+			WaitLogTimer = 0.0f;
+			UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent '%s': Waiting... WaitTimer=%.2f"), *NPCId, WaitTimer);
+		}
+
 		if (WaitTimer <= 0.0f)
 		{
 			WaitTimer = 0.0f;
+			UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent '%s': Wait complete (was %.2fs), advancing to next waypoint"),
+				*NPCId, OldTimer);
 			AdvancePatrolWaypoint();
 		}
 		return;
+	}
+
+	// Debug: Log if we're not in wait state but should be moving
+	static float DebugLogTimer = 0.0f;
+	DebugLogTimer += DeltaTime;
+	if (DebugLogTimer > 5.0f && bIsPatrolling)
+	{
+		DebugLogTimer = 0.0f;
+		UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent '%s': Tick state - bIsMoving=%s, bHasArrived=%s, bIsPatrolling=%s, WaitTimer=%.2f"),
+			*NPCId,
+			bIsMoving ? TEXT("true") : TEXT("false"),
+			bHasArrived ? TEXT("true") : TEXT("false"),
+			bIsPatrolling ? TEXT("true") : TEXT("false"),
+			WaitTimer);
 	}
 
 	// Execute movement if we have a target
@@ -88,25 +123,34 @@ bool UNPCScheduleComponent::LoadScheduleFromJSON()
 {
 	if (!GridManager || NPCId.IsEmpty())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("NPCScheduleComponent: Cannot load schedule - no GridManager or NPCId"));
+		UE_LOG(LogTemp, Warning, TEXT("NPCScheduleComponent: Cannot load schedule - GridManager=%s, NPCId='%s'"),
+			GridManager ? TEXT("valid") : TEXT("null"), *NPCId);
 		return false;
 	}
 
-	// Get schedule locations for this NPC
-	TArray<FMapScheduleLocation> JSONLocations = GridManager->GetNPCScheduleLocations(NPCId);
-
-	if (JSONLocations.Num() == 0)
+	// Get full schedule data for this NPC (includes times)
+	FMapPathData ScheduleData;
+	if (!GridManager->GetNPCScheduleData(NPCId, ScheduleData))
 	{
-		UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent: No schedule data found for NPC '%s'"), *NPCId);
+		UE_LOG(LogTemp, Warning, TEXT("NPCScheduleComponent: No schedule data found for NPC '%s' in GridManager"), *NPCId);
 		return false;
 	}
+
+	if (ScheduleData.Locations.Num() == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("NPCScheduleComponent: No locations in schedule data for NPC '%s'"), *NPCId);
+		return false;
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent: Found %d locations for NPC '%s' (times: %.0f:00 - %.0f:00)"),
+		ScheduleData.Locations.Num(), *NPCId, ScheduleData.StartTime, ScheduleData.EndTime);
 
 	// Create a patrol route from the locations
 	FPatrolRoute PatrolRoute;
 	PatrolRoute.RouteId = FString::Printf(TEXT("%s_patrol"), *NPCId);
 	PatrolRoute.bLooping = true;
 
-	for (const FMapScheduleLocation& JSONLoc : JSONLocations)
+	for (const FMapScheduleLocation& JSONLoc : ScheduleData.Locations)
 	{
 		FPatrolWaypoint Waypoint;
 		Waypoint.Name = JSONLoc.Name;
@@ -121,31 +165,46 @@ bool UNPCScheduleComponent::LoadScheduleFromJSON()
 
 	PatrolRoutes.Add(PatrolRoute);
 
-	// Create a default schedule entry for this patrol (6am - 6pm)
-	FNPCScheduleEntry DayShift;
-	DayShift.StartTime = 6.0f;
-	DayShift.EndTime = 18.0f;
-	DayShift.bIsPatrol = true;
-	DayShift.PatrolRouteId = PatrolRoute.RouteId;
-	DayShift.Activity = TEXT("patrolling");
-	Schedule.Add(DayShift);
+	// Use times from JSON data
+	float StartTime = ScheduleData.StartTime;
+	float EndTime = ScheduleData.EndTime;
 
-	// Create a "go home" entry for after shift (placeholder - goes to first waypoint)
+	// Create schedule entry for patrol using JSON times
+	FNPCScheduleEntry OnDuty;
+	OnDuty.StartTime = StartTime;
+	OnDuty.EndTime = EndTime;
+	OnDuty.bIsPatrol = true;
+	OnDuty.PatrolRouteId = PatrolRoute.RouteId;
+	OnDuty.Activity = TEXT("patrolling");
+	Schedule.Add(OnDuty);
+
+	// Create an "off duty" entry for when not patrolling
+	// Time is inverted: if patrol is 20-8, off duty is 8-20
 	if (PatrolRoute.Waypoints.Num() > 0)
 	{
 		FNPCScheduleEntry OffDuty;
-		OffDuty.StartTime = 18.0f;
-		OffDuty.EndTime = 6.0f;
+		OffDuty.StartTime = EndTime;
+		OffDuty.EndTime = StartTime;
 		OffDuty.bIsPatrol = false;
 		OffDuty.LocationName = TEXT("home");
-		OffDuty.Location = PatrolRoute.Waypoints[0].GridPosition; // Default to first point
-		OffDuty.Facing = EGridDirection::South;
+		// Use spawn point as home location if available
+		const FMapScheduleLocation* SpawnLoc = ScheduleData.GetSpawnLocation();
+		if (SpawnLoc)
+		{
+			OffDuty.Location = SpawnLoc->GetGridCoordinate();
+			OffDuty.Facing = SpawnLoc->GetFacingDirection();
+		}
+		else
+		{
+			OffDuty.Location = PatrolRoute.Waypoints[0].GridPosition;
+			OffDuty.Facing = EGridDirection::South;
+		}
 		OffDuty.Activity = TEXT("resting");
 		Schedule.Add(OffDuty);
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent: Loaded %d waypoints for NPC '%s'"),
-		PatrolRoute.Waypoints.Num(), *NPCId);
+	UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent: Loaded %d waypoints for NPC '%s' (schedule %.0f:00 - %.0f:00)"),
+		PatrolRoute.Waypoints.Num(), *NPCId, StartTime, EndTime);
 
 	return true;
 }
@@ -179,6 +238,10 @@ void UNPCScheduleComponent::UpdateSchedule()
 
 	if (ActiveEntry != CurrentScheduleIndex)
 	{
+		UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent '%s': Schedule change %d -> %d (Schedule.Num=%d, TimeManager=%s, Time=%.2f)"),
+			*NPCId, CurrentScheduleIndex, ActiveEntry, Schedule.Num(),
+			TimeManager ? TEXT("valid") : TEXT("null"),
+			TimeManager ? TimeManager->CurrentTime : -1.0f);
 		ActivateScheduleEntry(ActiveEntry);
 	}
 	else if (bIsPatrolling && bHasArrived && WaitTimer <= 0.0f)
@@ -367,6 +430,9 @@ void UNPCScheduleComponent::ActivateScheduleEntry(int32 EntryIndex)
 
 void UNPCScheduleComponent::AdvancePatrolWaypoint()
 {
+	UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent '%s': AdvancePatrolWaypoint called (bIsPatrolling=%s, CurrentScheduleIndex=%d)"),
+		*NPCId, bIsPatrolling ? TEXT("true") : TEXT("false"), CurrentScheduleIndex);
+
 	if (!bIsPatrolling || CurrentScheduleIndex < 0)
 	{
 		return;
@@ -376,21 +442,28 @@ void UNPCScheduleComponent::AdvancePatrolWaypoint()
 	FPatrolRoute Route;
 	if (!GetPatrolRoute(Entry.PatrolRouteId, Route) || Route.Waypoints.Num() == 0)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("NPCScheduleComponent '%s': No patrol route found for '%s'"),
+			*NPCId, *Entry.PatrolRouteId);
 		return;
 	}
 
 	// Move to next waypoint
 	CurrentPatrolWaypointIndex++;
 
+	UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent '%s': Advancing to waypoint %d/%d"),
+		*NPCId, CurrentPatrolWaypointIndex, Route.Waypoints.Num());
+
 	if (CurrentPatrolWaypointIndex >= Route.Waypoints.Num())
 	{
 		if (Route.bLooping)
 		{
 			CurrentPatrolWaypointIndex = 0;
+			UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent '%s': Looping back to waypoint 0"), *NPCId);
 		}
 		else
 		{
 			// Patrol complete
+			UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent '%s': Patrol complete, stopping"), *NPCId);
 			bIsPatrolling = false;
 			bIsMoving = false;
 			return;
@@ -402,6 +475,9 @@ void UNPCScheduleComponent::AdvancePatrolWaypoint()
 	CurrentTargetFacing = Waypoint.Facing;
 	CurrentArrivalTolerance = Waypoint.ArrivalTolerance;
 	bHasArrived = false;
+
+	UE_LOG(LogTemp, Log, TEXT("NPCScheduleComponent '%s': Moving to waypoint '%s' at (%f, %f, %f)"),
+		*NPCId, *Waypoint.Name, CurrentTargetPosition.X, CurrentTargetPosition.Y, CurrentTargetPosition.Z);
 
 	MoveToPosition(CurrentTargetPosition, CurrentArrivalTolerance);
 }
@@ -500,12 +576,18 @@ void UNPCScheduleComponent::ExecuteMovement(float DeltaTime)
 	{
 		if (AAIController* AIController = Cast<AAIController>(Pawn->GetController()))
 		{
-			// AI controller handles movement, we just monitor arrival
-			return;
+			// Check if AI is actually moving - if not, fall through to direct movement
+			EPathFollowingStatus::Type Status = AIController->GetMoveStatus();
+			if (Status == EPathFollowingStatus::Moving)
+			{
+				// AI controller is handling movement
+				return;
+			}
+			// AI not moving - try to restart or use fallback
 		}
 	}
 
-	// Fallback: simple direct movement
+	// Fallback: simple direct movement (no AI controller or AI not moving)
 	FVector CurrentLoc = Owner->GetActorLocation();
 	FVector Direction = (CurrentTargetPosition - CurrentLoc).GetSafeNormal2D();
 

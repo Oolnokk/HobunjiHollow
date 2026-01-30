@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "Grid/GridTypes.h"
+#include "Data/SpeciesDatabase.h"
 #include "NPCCharacterData.generated.h"
 
 class USkeletalMesh;
@@ -256,6 +257,10 @@ struct FNPCAppearance
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance")
 	FString SpeciesId;
 
+	/** Gender (for species mesh selection) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance")
+	ECharacterGender Gender = ECharacterGender::Male;
+
 	/** Primary character color (fur, skin, scales, feathers - depends on species) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Colors")
 	FLinearColor CharacterColor1 = FLinearColor::White;
@@ -402,6 +407,12 @@ public:
 	/** Age (for display, doesn't change) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Identity")
 	int32 Age = 25;
+
+	// ---- Spawning ----
+
+	/** The actor class to spawn for this NPC */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spawning")
+	TSubclassOf<AActor> ActorClass;
 
 	// ---- Appearance ----
 
