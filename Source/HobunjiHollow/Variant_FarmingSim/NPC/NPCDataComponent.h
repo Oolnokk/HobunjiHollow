@@ -29,16 +29,16 @@ public:
 
 	// ---- Configuration ----
 
-	/** NPC ID to load data for */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Data")
+	/** NPC ID to load data for (replicated to clients) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing = OnRep_NPCId, Category = "NPC Data")
 	FString NPCId;
 
 	/** Direct reference to NPC data (alternative to NPCId lookup) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Data")
 	UNPCCharacterData* NPCDataAsset;
 
-	/** Reference to the NPC registry for ID lookup */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Data")
+	/** Reference to the NPC registry for ID lookup (replicated to clients) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "NPC Data")
 	UNPCDataRegistry* DataRegistry;
 
 	/** Whether to automatically apply appearance on load */
@@ -89,10 +89,19 @@ public:
 	// ---- Core Functions ----
 
 	virtual void BeginPlay() override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	/** Called when NPCId is replicated to clients */
+	UFUNCTION()
+	void OnRep_NPCId();
 
 	/** Load NPC data from ID or direct reference */
 	UFUNCTION(BlueprintCallable, Category = "NPC Data")
 	bool LoadNPCData();
+
+	/** Multicast RPC to apply appearance on all clients */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_ApplyAppearance();
 
 	/** Load NPC data for a specific ID */
 	UFUNCTION(BlueprintCallable, Category = "NPC Data")

@@ -6,10 +6,34 @@
 #include "Data/SpeciesDatabase.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
+#include "Net/UnrealNetwork.h"
 
 UNPCDataComponent::UNPCDataComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
+	SetIsReplicatedByDefault(true);
+}
+
+void UNPCDataComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(UNPCDataComponent, NPCId);
+	DOREPLIFETIME(UNPCDataComponent, DataRegistry);
+}
+
+void UNPCDataComponent::OnRep_NPCId()
+{
+	UE_LOG(LogTemp, Log, TEXT("NPCDataComponent::OnRep_NPCId '%s': Received NPCId on client (DataRegistry=%s, LoadedData=%s)"),
+		*NPCId,
+		DataRegistry ? TEXT("Valid") : TEXT("Null"),
+		LoadedData ? TEXT("Valid") : TEXT("Null"));
+
+	if (!NPCId.IsEmpty() && !LoadedData)
+	{
+		bool bSuccess = LoadNPCData();
+		UE_LOG(LogTemp, Log, TEXT("NPCDataComponent::OnRep_NPCId '%s': LoadNPCData returned %s"),
+			*NPCId, bSuccess ? TEXT("true") : TEXT("false"));
+	}
 }
 
 void UNPCDataComponent::BeginPlay()
@@ -45,7 +69,7 @@ bool UNPCDataComponent::LoadNPCData()
 			CurrentAffection = LoadedData->RelationshipConfig.StartingAffection;
 		}
 
-		// Apply appearance
+		// Apply appearance locally
 		if (bAutoApplyAppearance)
 		{
 			ApplyAppearance();
@@ -57,6 +81,14 @@ bool UNPCDataComponent::LoadNPCData()
 			ConfigureScheduleComponent();
 		}
 
+		// If we're on the server, multicast to apply appearance on all clients
+		AActor* Owner = GetOwner();
+		if (Owner && Owner->HasAuthority() && bAutoApplyAppearance)
+		{
+			UE_LOG(LogTemp, Log, TEXT("NPCDataComponent '%s': Server calling Multicast_ApplyAppearance"), *NPCId);
+			Multicast_ApplyAppearance();
+		}
+
 		OnDataLoaded.Broadcast(LoadedData);
 
 		UE_LOG(LogTemp, Log, TEXT("NPCDataComponent: Loaded data for '%s'"), *NPCId);
@@ -65,6 +97,36 @@ bool UNPCDataComponent::LoadNPCData()
 
 	UE_LOG(LogTemp, Warning, TEXT("NPCDataComponent: Failed to load data for '%s'"), *NPCId);
 	return false;
+}
+
+void UNPCDataComponent::Multicast_ApplyAppearance_Implementation()
+{
+	UE_LOG(LogTemp, Log, TEXT("NPCDataComponent::Multicast_ApplyAppearance '%s': Received on %s"),
+		*NPCId,
+		GetOwner() && GetOwner()->HasAuthority() ? TEXT("Server") : TEXT("Client"));
+
+	// On clients, we need to load data first if not already loaded
+	if (!LoadedData)
+	{
+		// Try direct asset reference
+		if (NPCDataAsset)
+		{
+			LoadedData = NPCDataAsset;
+		}
+		// Try registry lookup
+		else if (!NPCId.IsEmpty() && DataRegistry)
+		{
+			LoadedData = DataRegistry->GetNPCData(NPCId);
+		}
+
+		if (!LoadedData)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("NPCDataComponent::Multicast_ApplyAppearance '%s': Failed to load data on client"), *NPCId);
+			return;
+		}
+	}
+
+	ApplyAppearance();
 }
 
 bool UNPCDataComponent::LoadNPCDataById(const FString& Id)
