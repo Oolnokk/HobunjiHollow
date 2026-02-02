@@ -9,6 +9,7 @@
 #include "FarmingPlayerState.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
+#include "AIController.h"
 
 AFarmingNPC::AFarmingNPC()
 {
@@ -18,6 +19,10 @@ AFarmingNPC::AFarmingNPC()
 	DisplayName = FText::FromString(TEXT("NPC"));
 	PointsPerHeartLevel = 250;
 	bIsHighlighted = false;
+
+	// Configure AI Controller for schedule-based movement
+	AIControllerClass = AAIController::StaticClass();
+	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 }
 
 void AFarmingNPC::BeginPlay()
