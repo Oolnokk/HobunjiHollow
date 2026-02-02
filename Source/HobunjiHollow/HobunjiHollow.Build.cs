@@ -29,6 +29,8 @@ public class HobunjiHollow : ModuleRules
 
 		PublicIncludePaths.AddRange(new string[] {
 			"HobunjiHollow",
+			"HobunjiHollow/Core",
+			"HobunjiHollow/Docs",
 			"HobunjiHollow/Variant_Strategy",
 			"HobunjiHollow/Variant_Strategy/UI",
 			"HobunjiHollow/Variant_TwinStick",
