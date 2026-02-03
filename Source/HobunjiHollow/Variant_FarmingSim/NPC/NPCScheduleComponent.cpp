@@ -683,7 +683,21 @@ bool UNPCScheduleComponent::TryUseRoadNavigation(const FVector& Destination, EGr
 	{
 		if (AAIController* AIController = Cast<AAIController>(Pawn->GetController()))
 		{
-			AIController->MoveToLocation(CurrentTargetPosition, CurrentArrivalTolerance);
+			EPathFollowingRequestResult::Type Result = AIController->MoveToLocation(CurrentTargetPosition, CurrentArrivalTolerance);
+			UE_LOG(LogTemp, Log, TEXT("NPC '%s' MoveToLocation result: %d (0=Failed, 1=AlreadyAtGoal, 2=RequestSuccessful)"),
+				*NPCId, (int32)Result);
+
+			if (Result == EPathFollowingRequestResult::Failed)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("NPC '%s' MoveToLocation FAILED! From (%.1f, %.1f, %.1f) to (%.1f, %.1f, %.1f)"),
+					*NPCId,
+					Owner->GetActorLocation().X, Owner->GetActorLocation().Y, Owner->GetActorLocation().Z,
+					CurrentTargetPosition.X, CurrentTargetPosition.Y, CurrentTargetPosition.Z);
+			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("NPC '%s' has no AIController!"), *NPCId);
 		}
 	}
 
@@ -721,7 +735,8 @@ void UNPCScheduleComponent::AdvanceRoadPath()
 			{
 				if (AAIController* AIController = Cast<AAIController>(Pawn->GetController()))
 				{
-					AIController->MoveToLocation(CurrentTargetPosition, CurrentArrivalTolerance);
+					EPathFollowingRequestResult::Type Result = AIController->MoveToLocation(CurrentTargetPosition, CurrentArrivalTolerance);
+					UE_LOG(LogTemp, Log, TEXT("NPC '%s' MoveToLocation (final dest) result: %d"), *NPCId, (int32)Result);
 				}
 			}
 		}
@@ -738,7 +753,8 @@ void UNPCScheduleComponent::AdvanceRoadPath()
 		{
 			if (AAIController* AIController = Cast<AAIController>(Pawn->GetController()))
 			{
-				AIController->MoveToLocation(CurrentTargetPosition, CurrentArrivalTolerance);
+				EPathFollowingRequestResult::Type Result = AIController->MoveToLocation(CurrentTargetPosition, CurrentArrivalTolerance);
+				UE_LOG(LogTemp, Log, TEXT("NPC '%s' MoveToLocation (road wp %d) result: %d"), *NPCId, CurrentRoadPathIndex, (int32)Result);
 			}
 		}
 	}
