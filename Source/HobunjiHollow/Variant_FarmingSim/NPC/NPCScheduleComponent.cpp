@@ -110,12 +110,7 @@ void UNPCScheduleComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 	if (bIsMoving)
 	{
 		ExecuteMovement(DeltaTime);
-
-		// If following road and arrived at current road waypoint, advance to next
-		if (bIsFollowingRoad && HasArrivedAtDestination())
-		{
-			AdvanceRoadPath();
-		}
+		// Road advancement is now handled inside ExecuteMovement()
 	}
 }
 
@@ -309,8 +304,22 @@ bool UNPCScheduleComponent::HasArrivedAtDestination() const
 		return false;
 	}
 
-	float Distance = FVector::Dist2D(Owner->GetActorLocation(), CurrentTargetPosition);
-	return Distance <= CurrentArrivalTolerance;
+	FVector CurrentPos = Owner->GetActorLocation();
+	float Distance = FVector::Dist2D(CurrentPos, CurrentTargetPosition);
+	bool bArrived = Distance <= CurrentArrivalTolerance;
+
+	// Debug log to understand why instant arrival happens
+	static float ArrivalLogTimer = 0.0f;
+	ArrivalLogTimer += GetWorld()->GetDeltaSeconds();
+	if (ArrivalLogTimer >= 0.5f || bArrived)
+	{
+		ArrivalLogTimer = 0.0f;
+		UE_LOG(LogTemp, Log, TEXT("NPC '%s' HasArrived check: Dist=%.1f, Tolerance=%.1f, Arrived=%s | Pos=(%.1f,%.1f) Target=(%.1f,%.1f)"),
+			*NPCId, Distance, CurrentArrivalTolerance, bArrived ? TEXT("YES") : TEXT("no"),
+			CurrentPos.X, CurrentPos.Y, CurrentTargetPosition.X, CurrentTargetPosition.Y);
+	}
+
+	return bArrived;
 }
 
 int32 UNPCScheduleComponent::FindActiveScheduleEntry() const
@@ -527,6 +536,17 @@ void UNPCScheduleComponent::ExecuteMovement(float DeltaTime)
 	// Check if arrived
 	if (HasArrivedAtDestination())
 	{
+		// If following a road, advance to next road waypoint instead of declaring patrol arrival
+		if (bIsFollowingRoad)
+		{
+			AdvanceRoadPath();
+			// AdvanceRoadPath() will either:
+			// - Move to next road waypoint (keeps bIsFollowingRoad true)
+			// - Finish road and move to final destination (sets bIsFollowingRoad false)
+			// Either way, don't mark as arrived yet - wait for actual patrol waypoint arrival
+			return;
+		}
+
 		if (!bHasArrived)
 		{
 			bHasArrived = true;
@@ -661,11 +681,20 @@ bool UNPCScheduleComponent::TryUseRoadNavigation(const FVector& Destination, EGr
 
 	// Set up road navigation
 	CurrentRoadPath = RoadPath;
-	CurrentRoadPathIndex = 0;
+	// Index 0 is the NPC's current position (start of path), so start at index 1
+	CurrentRoadPathIndex = 1;
 	bIsFollowingRoad = true;
 
-	// Set first waypoint as current target
-	CurrentTargetPosition = CurrentRoadPath[0];
+	// Ensure we have at least 2 points (start + destination)
+	if (CurrentRoadPath.Num() < 2)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("NPC '%s' road path only has %d points, need at least 2"), *NPCId, CurrentRoadPath.Num());
+		bIsFollowingRoad = false;
+		return false;
+	}
+
+	// Set first actual waypoint as target (skip index 0 which is current position)
+	CurrentTargetPosition = CurrentRoadPath[1];
 
 	UE_LOG(LogTemp, Log, TEXT("NPC '%s' using road navigation with %d waypoints"),
 		*NPCId, CurrentRoadPath.Num());
@@ -675,7 +704,21 @@ bool UNPCScheduleComponent::TryUseRoadNavigation(const FVector& Destination, EGr
 	{
 		if (AAIController* AIController = Cast<AAIController>(Pawn->GetController()))
 		{
-			AIController->MoveToLocation(CurrentTargetPosition, CurrentArrivalTolerance);
+			EPathFollowingRequestResult::Type Result = AIController->MoveToLocation(CurrentTargetPosition, CurrentArrivalTolerance);
+			UE_LOG(LogTemp, Log, TEXT("NPC '%s' MoveToLocation result: %d (0=Failed, 1=AlreadyAtGoal, 2=RequestSuccessful)"),
+				*NPCId, (int32)Result);
+
+			if (Result == EPathFollowingRequestResult::Failed)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("NPC '%s' MoveToLocation FAILED! From (%.1f, %.1f, %.1f) to (%.1f, %.1f, %.1f)"),
+					*NPCId,
+					Owner->GetActorLocation().X, Owner->GetActorLocation().Y, Owner->GetActorLocation().Z,
+					CurrentTargetPosition.X, CurrentTargetPosition.Y, CurrentTargetPosition.Z);
+			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("NPC '%s' has no AIController!"), *NPCId);
 		}
 	}
 
@@ -713,7 +756,8 @@ void UNPCScheduleComponent::AdvanceRoadPath()
 			{
 				if (AAIController* AIController = Cast<AAIController>(Pawn->GetController()))
 				{
-					AIController->MoveToLocation(CurrentTargetPosition, CurrentArrivalTolerance);
+					EPathFollowingRequestResult::Type Result = AIController->MoveToLocation(CurrentTargetPosition, CurrentArrivalTolerance);
+					UE_LOG(LogTemp, Log, TEXT("NPC '%s' MoveToLocation (final dest) result: %d"), *NPCId, (int32)Result);
 				}
 			}
 		}
@@ -730,7 +774,8 @@ void UNPCScheduleComponent::AdvanceRoadPath()
 		{
 			if (AAIController* AIController = Cast<AAIController>(Pawn->GetController()))
 			{
-				AIController->MoveToLocation(CurrentTargetPosition, CurrentArrivalTolerance);
+				EPathFollowingRequestResult::Type Result = AIController->MoveToLocation(CurrentTargetPosition, CurrentArrivalTolerance);
+				UE_LOG(LogTemp, Log, TEXT("NPC '%s' MoveToLocation (road wp %d) result: %d"), *NPCId, CurrentRoadPathIndex, (int32)Result);
 			}
 		}
 	}
