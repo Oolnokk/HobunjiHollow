@@ -683,11 +683,20 @@ bool UNPCScheduleComponent::TryUseRoadNavigation(const FVector& Destination, EGr
 
 	// Set up road navigation
 	CurrentRoadPath = RoadPath;
-	CurrentRoadPathIndex = 0;
+	// Index 0 is the NPC's current position (start of path), so start at index 1
+	CurrentRoadPathIndex = 1;
 	bIsFollowingRoad = true;
 
-	// Set first waypoint as current target
-	CurrentTargetPosition = CurrentRoadPath[0];
+	// Ensure we have at least 2 points (start + destination)
+	if (CurrentRoadPath.Num() < 2)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("NPC '%s' road path only has %d points, need at least 2"), *NPCId, CurrentRoadPath.Num());
+		bIsFollowingRoad = false;
+		return false;
+	}
+
+	// Set first actual waypoint as target (skip index 0 which is current position)
+	CurrentTargetPosition = CurrentRoadPath[1];
 
 	UE_LOG(LogTemp, Log, TEXT("NPC '%s' using road navigation with %d waypoints"),
 		*NPCId, CurrentRoadPath.Num());
