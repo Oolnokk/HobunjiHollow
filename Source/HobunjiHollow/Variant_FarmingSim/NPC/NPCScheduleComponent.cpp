@@ -110,12 +110,7 @@ void UNPCScheduleComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 	if (bIsMoving)
 	{
 		ExecuteMovement(DeltaTime);
-
-		// If following road and arrived at current road waypoint, advance to next
-		if (bIsFollowingRoad && HasArrivedAtDestination())
-		{
-			AdvanceRoadPath();
-		}
+		// Road advancement is now handled inside ExecuteMovement()
 	}
 }
 
@@ -541,18 +536,21 @@ void UNPCScheduleComponent::ExecuteMovement(float DeltaTime)
 	// Check if arrived
 	if (HasArrivedAtDestination())
 	{
+		// If following a road, advance to next road waypoint instead of declaring patrol arrival
+		if (bIsFollowingRoad)
+		{
+			AdvanceRoadPath();
+			// AdvanceRoadPath() will either:
+			// - Move to next road waypoint (keeps bIsFollowingRoad true)
+			// - Finish road and move to final destination (sets bIsFollowingRoad false)
+			// Either way, don't mark as arrived yet - wait for actual patrol waypoint arrival
+			return;
+		}
+
 		if (!bHasArrived)
 		{
 			bHasArrived = true;
 			bIsMoving = false;
-
-			// Clear road navigation state when arriving at final destination
-			if (bIsFollowingRoad)
-			{
-				bIsFollowingRoad = false;
-				CurrentRoadPath.Empty();
-				CurrentRoadPathIndex = 0;
-			}
 
 			UpdateFacingDirection();
 
