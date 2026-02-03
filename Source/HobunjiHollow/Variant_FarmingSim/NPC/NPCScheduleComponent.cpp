@@ -532,6 +532,14 @@ void UNPCScheduleComponent::ExecuteMovement(float DeltaTime)
 			bHasArrived = true;
 			bIsMoving = false;
 
+			// Clear road navigation state when arriving at final destination
+			if (bIsFollowingRoad)
+			{
+				bIsFollowingRoad = false;
+				CurrentRoadPath.Empty();
+				CurrentRoadPathIndex = 0;
+			}
+
 			UpdateFacingDirection();
 
 			if (bIsPatrolling)
