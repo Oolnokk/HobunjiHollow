@@ -970,19 +970,14 @@ TArray<FNPCDebugValidation> UNPCScheduleDebugComponent::ValidateGlobalSystems(UO
 		FNPCDebugValidation Check;
 		Check.CheckName = TEXT("NPC Schedule Spawner");
 
-		AActor* Spawner = UGameplayStatics::GetActorOfClass(World,
-			FindObject<UClass>(ANY_PACKAGE, TEXT("NPCScheduleSpawner")));
-
-		// Try to find by iterating if class lookup fails
-		if (!Spawner)
+		// Find spawner by iterating through actors
+		AActor* Spawner = nullptr;
+		for (TActorIterator<AActor> It(World); It; ++It)
 		{
-			for (TActorIterator<AActor> It(World); It; ++It)
+			if (It->GetClass()->GetName().Contains(TEXT("NPCScheduleSpawner")))
 			{
-				if (It->GetClass()->GetName().Contains(TEXT("NPCScheduleSpawner")))
-				{
-					Spawner = *It;
-					break;
-				}
+				Spawner = *It;
+				break;
 			}
 		}
 
