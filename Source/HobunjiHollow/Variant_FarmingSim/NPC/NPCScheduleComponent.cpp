@@ -309,8 +309,22 @@ bool UNPCScheduleComponent::HasArrivedAtDestination() const
 		return false;
 	}
 
-	float Distance = FVector::Dist2D(Owner->GetActorLocation(), CurrentTargetPosition);
-	return Distance <= CurrentArrivalTolerance;
+	FVector CurrentPos = Owner->GetActorLocation();
+	float Distance = FVector::Dist2D(CurrentPos, CurrentTargetPosition);
+	bool bArrived = Distance <= CurrentArrivalTolerance;
+
+	// Debug log to understand why instant arrival happens
+	static float ArrivalLogTimer = 0.0f;
+	ArrivalLogTimer += GetWorld()->GetDeltaSeconds();
+	if (ArrivalLogTimer >= 0.5f || bArrived)
+	{
+		ArrivalLogTimer = 0.0f;
+		UE_LOG(LogTemp, Log, TEXT("NPC '%s' HasArrived check: Dist=%.1f, Tolerance=%.1f, Arrived=%s | Pos=(%.1f,%.1f) Target=(%.1f,%.1f)"),
+			*NPCId, Distance, CurrentArrivalTolerance, bArrived ? TEXT("YES") : TEXT("no"),
+			CurrentPos.X, CurrentPos.Y, CurrentTargetPosition.X, CurrentTargetPosition.Y);
+	}
+
+	return bArrived;
 }
 
 int32 UNPCScheduleComponent::FindActiveScheduleEntry() const
