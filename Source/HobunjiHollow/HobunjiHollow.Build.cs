@@ -30,6 +30,7 @@ public class HobunjiHollow : ModuleRules
 		PublicIncludePaths.AddRange(new string[] {
 			"HobunjiHollow",
 			"HobunjiHollow/Core",
+			"HobunjiHollow/Core/Rendering",
 			"HobunjiHollow/Docs",
 			"HobunjiHollow/Variant_Strategy",
 			"HobunjiHollow/Variant_Strategy/UI",

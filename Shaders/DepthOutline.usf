@@ -1,0 +1,165 @@
+// DepthOutline.usf - Depth-Based Outline Shader for UE5
+// Adapted from HobunjiHollow reference implementation (HA)Vt3D6
+//
+// This shader detects depth discontinuities for stylized outlines.
+// Use with Custom Expressions in Post-Process Materials.
+
+#include "/Engine/Private/Common.ush"
+
+// Linearize depth from scene depth buffer
+// Returns linear depth value (near=0, far=camera far plane)
+float GetLinearDepth(float2 UV)
+{
+    float DeviceZ = SceneTexturesStruct.SceneDepthTexture.SampleLevel(
+        SceneTexturesStruct.SceneDepthTextureSampler,
+        UV,
+        0
+    ).r;
+
+    return ConvertFromDeviceZ(DeviceZ);
+}
+
+// Alternative using CalcSceneDepth for compatibility
+float GetLinearDepthAlt(float2 UV)
+{
+    return CalcSceneDepth(UV);
+}
+
+// Detect depth edges using centered differences (Sobel-like)
+// Returns edge intensity 0-1
+float DetectDepthEdge(float2 UV, float2 TexelSize, float CenterDepth, float DepthSensitivity, float CameraNear, float CameraFar)
+{
+    // Sample neighbors
+    float DepthN = GetLinearDepthAlt(UV + float2(0.0, TexelSize.y));
+    float DepthS = GetLinearDepthAlt(UV - float2(0.0, TexelSize.y));
+    float DepthE = GetLinearDepthAlt(UV + float2(TexelSize.x, 0.0));
+    float DepthW = GetLinearDepthAlt(UV - float2(TexelSize.x, 0.0));
+
+    // Compute gradients
+    float DX = abs(DepthE - DepthW);
+    float DY = abs(DepthN - DepthS);
+    float Gradient = max(DX, DY);
+
+    // Adaptive threshold based on distance (closer = smaller threshold needed)
+    float DepthRange = CameraFar - CameraNear;
+    float NormalizedDepth = saturate((CenterDepth - CameraNear) / DepthRange);
+
+    // Scale threshold: more sensitive at close range, less at far range
+    float AdaptiveThreshold = DepthSensitivity * (1.0 + NormalizedDepth * 3.0);
+
+    return smoothstep(AdaptiveThreshold, AdaptiveThreshold * 1.5, Gradient);
+}
+
+// Roberts Cross edge detection (alternative, faster)
+float DetectDepthEdgeRoberts(float2 UV, float2 TexelSize, float DepthSensitivity)
+{
+    float D00 = GetLinearDepthAlt(UV);
+    float D11 = GetLinearDepthAlt(UV + TexelSize);
+    float D10 = GetLinearDepthAlt(UV + float2(TexelSize.x, 0));
+    float D01 = GetLinearDepthAlt(UV + float2(0, TexelSize.y));
+
+    float GX = D00 - D11;
+    float GY = D10 - D01;
+
+    float Edge = sqrt(GX * GX + GY * GY);
+
+    return smoothstep(DepthSensitivity * 0.5, DepthSensitivity, Edge);
+}
+
+// Main depth outline function
+// Parameters:
+//   UV: Screen UV coordinates
+//   OutlineThickness: Base outline thickness in pixels
+//   DepthSensitivity: How sensitive to depth changes (0.01-1.0 recommended)
+//   DistanceShrinkFactor: How much outlines thin with distance (50-200 recommended)
+//   OutlineColor: RGB color for the outline
+//   CameraNear: Camera near plane distance
+//   CameraFar: Camera far plane distance
+//   Resolution: Screen resolution (width, height)
+float4 DepthOutlineMain(
+    float2 UV,
+    float OutlineThickness,
+    float DepthSensitivity,
+    float DistanceShrinkFactor,
+    float3 OutlineColor,
+    float CameraNear,
+    float CameraFar,
+    float2 Resolution,
+    float4 SceneColor
+)
+{
+    float CenterDepth = GetLinearDepthAlt(UV);
+
+    // Scale outline thickness based on distance
+    // Far away objects get thinner outlines, close objects get thicker
+    float DepthRange = CameraFar - CameraNear;
+    float NormalizedDepth = saturate((CenterDepth - CameraNear) / DepthRange);
+    float DistanceScale = 1.0 / (1.0 + NormalizedDepth * DistanceShrinkFactor);
+
+    float2 TexelSize = (OutlineThickness * DistanceScale) / Resolution;
+
+    // Detect depth edge
+    float Edge = DetectDepthEdge(UV, TexelSize, CenterDepth, DepthSensitivity, CameraNear, CameraFar);
+
+    // Mix outline color where edges are detected
+    return lerp(SceneColor, float4(OutlineColor, 1.0), Edge);
+}
+
+// Normal-based edge detection (for material boundaries)
+// Uses world normal buffer
+float DetectNormalEdge(float2 UV, float2 TexelSize, float NormalSensitivity)
+{
+    // Sample world normals from GBuffer
+    float3 NC = SceneTexturesStruct.GBufferATexture.SampleLevel(
+        SceneTexturesStruct.GBufferATextureSampler, UV, 0).rgb * 2.0 - 1.0;
+    float3 NN = SceneTexturesStruct.GBufferATexture.SampleLevel(
+        SceneTexturesStruct.GBufferATextureSampler, UV + float2(0, TexelSize.y), 0).rgb * 2.0 - 1.0;
+    float3 NS = SceneTexturesStruct.GBufferATexture.SampleLevel(
+        SceneTexturesStruct.GBufferATextureSampler, UV - float2(0, TexelSize.y), 0).rgb * 2.0 - 1.0;
+    float3 NE = SceneTexturesStruct.GBufferATexture.SampleLevel(
+        SceneTexturesStruct.GBufferATextureSampler, UV + float2(TexelSize.x, 0), 0).rgb * 2.0 - 1.0;
+    float3 NW = SceneTexturesStruct.GBufferATexture.SampleLevel(
+        SceneTexturesStruct.GBufferATextureSampler, UV - float2(TexelSize.x, 0), 0).rgb * 2.0 - 1.0;
+
+    float DN = 1.0 - saturate(dot(NC, NN));
+    float DS = 1.0 - saturate(dot(NC, NS));
+    float DE = 1.0 - saturate(dot(NC, NE));
+    float DW = 1.0 - saturate(dot(NC, NW));
+
+    float MaxDiff = max(max(DN, DS), max(DE, DW));
+
+    return smoothstep(NormalSensitivity * 0.5, NormalSensitivity, MaxDiff);
+}
+
+// Combined depth + normal outline
+float4 CombinedOutlineMain(
+    float2 UV,
+    float OutlineThickness,
+    float DepthSensitivity,
+    float NormalSensitivity,
+    float DistanceShrinkFactor,
+    float3 OutlineColor,
+    float CameraNear,
+    float CameraFar,
+    float2 Resolution,
+    float4 SceneColor
+)
+{
+    float CenterDepth = GetLinearDepthAlt(UV);
+
+    // Distance-based scaling
+    float DepthRange = CameraFar - CameraNear;
+    float NormalizedDepth = saturate((CenterDepth - CameraNear) / DepthRange);
+    float DistanceScale = 1.0 / (1.0 + NormalizedDepth * DistanceShrinkFactor);
+
+    float2 TexelSize = (OutlineThickness * DistanceScale) / Resolution;
+
+    // Detect both edge types
+    float DepthEdge = DetectDepthEdge(UV, TexelSize, CenterDepth, DepthSensitivity, CameraNear, CameraFar);
+    float NormalEdge = DetectNormalEdge(UV, TexelSize, NormalSensitivity);
+
+    // Combine edges
+    float Edge = max(DepthEdge, NormalEdge);
+
+    return lerp(SceneColor, float4(OutlineColor, 1.0), Edge);
+}

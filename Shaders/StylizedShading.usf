@@ -1,0 +1,426 @@
+// StylizedShading.usf - Toon/Cel Shading Functions for UE5
+// Adapted from HobunjiHollow reference implementation (HA)Vt3D6
+//
+// Use these functions in Custom Expression nodes within your materials.
+
+#include "/Engine/Private/Common.ush"
+
+// ============================================================================
+// NOISE FUNCTIONS
+// ============================================================================
+
+// Simple hash function
+float Hash1(float N)
+{
+    return frac(sin(N) * 43758.5453123);
+}
+
+// Hash for 3D position
+float Hash3(float3 P)
+{
+    return Hash1(dot(P, float3(127.1, 311.7, 74.7)));
+}
+
+// 3D value noise
+float Noise3D(float3 X)
+{
+    float3 I = floor(X);
+    float3 F = frac(X);
+    F = F * F * (3.0 - 2.0 * F); // Smoothstep
+
+    float N000 = Hash3(I + float3(0, 0, 0));
+    float N100 = Hash3(I + float3(1, 0, 0));
+    float N010 = Hash3(I + float3(0, 1, 0));
+    float N110 = Hash3(I + float3(1, 1, 0));
+    float N001 = Hash3(I + float3(0, 0, 1));
+    float N101 = Hash3(I + float3(1, 0, 1));
+    float N011 = Hash3(I + float3(0, 1, 1));
+    float N111 = Hash3(I + float3(1, 1, 1));
+
+    float NX00 = lerp(N000, N100, F.x);
+    float NX10 = lerp(N010, N110, F.x);
+    float NX01 = lerp(N001, N101, F.x);
+    float NX11 = lerp(N011, N111, F.x);
+    float NXY0 = lerp(NX00, NX10, F.y);
+    float NXY1 = lerp(NX01, NX11, F.y);
+
+    return lerp(NXY0, NXY1, F.z);
+}
+
+// Signed noise (-1 to 1)
+float SignedNoise(float3 P)
+{
+    return (Noise3D(P) - 0.5) * 2.0;
+}
+
+// Kink noise for sharp features
+float KinkNoise(float3 P)
+{
+    return step(0.88, Noise3D(P));
+}
+
+// ============================================================================
+// DEFORMATION FUNCTIONS
+// ============================================================================
+
+// Full deformation scalar (wobble + jitter + kink)
+float DeformScalarFull(float3 PosObj, float WobbleTurns, float WobbleAmp, float JitterAmp, float KinkStrength)
+{
+    float FBig = max(0.05, WobbleTurns * 2.0);
+    float Big = SignedNoise(PosObj * FBig) * WobbleAmp;
+    float Small = SignedNoise(PosObj * 11.0) * JitterAmp;
+    float Kink = KinkNoise(PosObj * 2.7) * KinkStrength;
+    return Big + Small + Kink;
+}
+
+// Big-scale deformation only
+float DeformScalarBig(float3 PosObj, float WobbleTurns, float WobbleAmp)
+{
+    float FBig = max(0.05, WobbleTurns * 2.0);
+    return SignedNoise(PosObj * FBig) * WobbleAmp;
+}
+
+// Apply convex bias and inward clamp to deformation
+float ApplyConvexClamp(float Raw, float3 PosObj, float3 NormalObj, float DeformAmount, float ConvexBias, float InwardClamp)
+{
+    float3 FromC = normalize(PosObj + float3(0.000001, 0.000001, 0.000001));
+    float Radial = max(0.0, dot(NormalObj, FromC));
+    float ConvexPush = ConvexBias * Radial * DeformAmount;
+    float MinIn = -abs(DeformAmount) * InwardClamp;
+    return clamp(Raw, MinIn, abs(DeformAmount)) + ConvexPush;
+}
+
+// ============================================================================
+// STONE/CLIFF DEFORMATION
+// ============================================================================
+
+// Stone/cliff vertex displacement
+// Returns displacement vector to add to position
+float3 StoneDeformation(
+    float3 Position,
+    float3 Normal,
+    float StoneModeMix,
+    float3 StoneFacingDir,
+    float StoneIsotropic,
+    float StoneMinFacingDot,
+    float StoneVerticalMaxAbsNy,
+    float StoneNoiseScale,
+    float StoneErodeStrength,
+    float StoneChipStrength,
+    float StoneStrataScale,
+    float StoneStrataStrength
+)
+{
+    float SMix = saturate(StoneModeMix);
+    if (SMix < 0.001) return float3(0, 0, 0);
+
+    float3 FdS = normalize(StoneFacingDir + float3(0.000001, 0.000001, 0.000001));
+    float FacingS = dot(normalize(Normal), FdS);
+    float FacingMaskS0 = smoothstep(StoneMinFacingDot, 1.0, FacingS);
+    float IsoS = step(0.5, StoneIsotropic);
+    float FacingMaskS = lerp(FacingMaskS0, 1.0, IsoS);
+    float VMaskS = 1.0 - smoothstep(StoneVerticalMaxAbsNy, StoneVerticalMaxAbsNy + 0.25, abs(Normal.z)); // Z is up in UE
+
+    float MS = saturate(FacingMaskS * VMaskS) * SMix;
+
+    float3 PS = Position * StoneNoiseScale;
+    float N0S = SignedNoise(PS * 0.90 + float3(0.0, 1.7, 0.0));
+    float N1S = SignedNoise(PS * 2.10 + float3(11.0, -3.0, 7.0));
+    float CarveS = -abs(N0S) * StoneErodeStrength;
+    float ChipS = -smoothstep(0.25, 0.85, N1S) * StoneChipStrength;
+    float StrataPhaseS = (Position.z * StoneStrataScale) + SignedNoise(PS * 0.35) * 1.2;
+    float StrataS = smoothstep(0.72, 1.0, sin(StrataPhaseS)) * StoneStrataStrength;
+
+    float3 BiteAxisS = lerp(
+        FdS,
+        normalize(float3(
+            SignedNoise(PS * 0.55 + float3(9.0, 2.0, 5.0)),
+            SignedNoise(PS * 0.55 + float3(-3.0, 7.0, 1.0)),
+            SignedNoise(PS * 0.55 + float3(4.0, -6.0, 8.0))
+        ) + float3(0.000001, 0.000001, 0.000001)),
+        IsoS
+    );
+    float3 TangentS = normalize(cross(Normal, BiteAxisS) + float3(0.000001, 0.000001, 0.000001));
+    float BiteS = SignedNoise(PS * 3.30 + float3(2.0, 0.0, -5.0)) * (StoneChipStrength * 0.22) * MS;
+
+    return Normal * ((CarveS + ChipS + StrataS) * MS) + TangentS * BiteS;
+}
+
+// ============================================================================
+// GRASS VERTEX DISPLACEMENT
+// ============================================================================
+
+// Anime tuft function - creates chunky spikes
+float AnimeTuft(float X)
+{
+    float T = smoothstep(0.35, 0.65, X);
+    return step(0.5, T) * 2.0 - 1.0;
+}
+
+// Cluster noise for grouped tufts
+float ClusterNoise(float2 P, float Freq)
+{
+    float N1 = Noise3D(float3(P * Freq * 0.3, 0.0));
+    float N2 = Noise3D(float3(P * Freq, 0.0));
+    return N1 * 0.7 + N2 * 0.3;
+}
+
+// Full grass vertex displacement
+// Returns displacement vector to add to position
+float3 GrassDisplacement(
+    float3 Position,
+    float3 Normal,
+    float3 UpAxis,
+    float Time,
+    float GrassHeight,
+    float GrassJagged,
+    float GrassWidth,
+    float GrassFreq,
+    float3 WindVelocity,
+    float WindStrength
+)
+{
+    // Align normal for upward grass growth
+    float3 UpA = normalize(UpAxis);
+    float3 NObjAligned = Normal;
+    if (dot(NObjAligned, UpA) < 0.0) NObjAligned = -NObjAligned;
+
+    float UpDot = dot(normalize(NObjAligned), UpA);
+    float UpMask = smoothstep(-0.10, 0.45, UpDot);
+
+    // Wind setup
+    float3 WindXZ = float3(WindVelocity.x, WindVelocity.y, 0.0);
+    float WLen = length(WindXZ);
+    float3 WDir = (WLen < 0.00001) ? float3(1.0, 0.0, 0.0) : (WindXZ / WLen);
+
+    float W = saturate(WLen);
+    float WAmt = W * W * WindStrength;
+
+    float TAnim = (WAmt < 0.000001) ? 0.0 : Time;
+    float3 WVec = float3(WDir.x, WDir.y, 0.0) * WAmt;
+
+    float3 P = Position + WVec * TAnim * 0.25;
+
+    // Anime tuft generation
+    float ClusterBase = ClusterNoise(P.xy, GrassFreq * 0.5);
+
+    float WidthFactor = clamp(GrassWidth, 0.1, 2.0);
+    float ThresholdLow = lerp(0.2, 0.45, 1.0 - WidthFactor);
+    float ThresholdHigh = lerp(0.6, 0.55, 1.0 - WidthFactor);
+    float TuftMask = smoothstep(ThresholdLow, ThresholdHigh, ClusterBase);
+
+    // Two layers of detail
+    float N1 = Noise3D(float3(P.xy * (2.0 * GrassFreq), TAnim * 0.35));
+    float N2 = Noise3D(float3((P.xy + float2(1.7, -0.9)) * (4.0 * GrassFreq), TAnim * 0.55));
+
+    float Tuft1 = AnimeTuft(N1);
+    float Tuft2 = AnimeTuft(N2);
+    float TuftShape = Tuft1 * 0.7 + Tuft2 * 0.3;
+
+    // Chunky spike height
+    float SpikeHeight = abs(TuftShape) * GrassHeight * 3.5 * UpMask * TuftMask;
+
+    // Anime curve (bend forward)
+    float CurveAmount = GrassJagged * 0.8;
+    float3 CurveDir = normalize(cross(UpA, float3(1.0, 0.0, 0.0)) + float3(0.01, 0.01, 0.01));
+    float CurvePower = pow(abs(TuftShape), 0.7);
+    float3 CurveOffset = CurveDir * CurveAmount * SpikeHeight * CurvePower;
+
+    // Wind tear
+    float Tear = TuftShape * GrassHeight * 0.7 * GrassJagged * UpMask * WAmt * TuftMask;
+
+    float3 Displacement = float3(0, 0, 0);
+    Displacement += NObjAligned * SpikeHeight;
+    Displacement += CurveOffset;
+    Displacement += WDir * Tear;
+    Displacement += UpA * (abs(Tear) * 0.4);
+
+    return Displacement;
+}
+
+// ============================================================================
+// TOON SHADING FUNCTIONS
+// ============================================================================
+
+// Calculate toon lit/shadow boundary
+// Returns 0 for shadow, 1 for lit
+float ToonShadowBoundary(
+    float3 WorldNormal,
+    float3 WorldPosition,
+    float3 LightDirection,
+    float3 CameraPosition,
+    float ShadeThreshold,
+    float ShadeWarpAmp,
+    float WobbleTurns,
+    float WobbleAmp,
+    float EdgeAttach,
+    float EdgeBand
+)
+{
+    float3 NW = normalize(WorldNormal);
+    float3 VW = normalize(CameraPosition - WorldPosition);
+
+    // Calculate N dot L for shape light
+    float NdL = dot(NW, normalize(LightDirection));
+    float Lit = NdL * 0.5 + 0.5;
+
+    // N dot V for rim/edge effects
+    float NdV = abs(dot(NW, VW));
+
+    // Add wobble variation to threshold
+    float WBig = DeformScalarBig(WorldPosition * 0.1, WobbleTurns, WobbleAmp);
+    float BaseT = ShadeThreshold + WBig * ShadeWarpAmp;
+
+    // Rim contribution to shadow boundary
+    float Rim = 1.0 - smoothstep(0.1, 0.3, NdV);
+    float DarkAmt = saturate(1.0 - Lit);
+    float RimBoost = Rim * EdgeAttach * lerp(0.06, 0.55, DarkAmt) * EdgeBand;
+    float WarpedT = BaseT + RimBoost;
+
+    // Binary shadow boundary
+    return step(WarpedT, Lit);
+}
+
+// Full toon shading calculation
+// Returns final color after toon shading
+float3 ToonShading(
+    float3 BaseColor,
+    float3 WorldNormal,
+    float3 WorldPosition,
+    float3 LightDirection,
+    float3 CameraPosition,
+    float ShadeDarken,
+    float ShadeThreshold,
+    float ShadeWarpAmp,
+    float WobbleTurns,
+    float WobbleAmp,
+    float EdgeAttach,
+    float EdgeBand,
+    float RimLit,
+    float RimShadow,
+    float RimWidthLit,
+    float RimWidthShadow,
+    float TermInk,
+    float TermWidth,
+    float3 SkyColor,
+    float3 GroundColor,
+    float HemiIntensity
+)
+{
+    float3 NW = normalize(WorldNormal);
+    float3 VW = normalize(CameraPosition - WorldPosition);
+    float3 LightDir = normalize(LightDirection);
+
+    // Basic N dot L
+    float NdL = dot(NW, LightDir);
+    float Lit = NdL * 0.5 + 0.5;
+    float DarkAmt = saturate(1.0 - Lit);
+
+    // N dot V for rim
+    float NdV = abs(dot(NW, VW));
+
+    // Wobble variation
+    float WBig = DeformScalarBig(WorldPosition * 0.1, WobbleTurns, WobbleAmp);
+    float BaseT = ShadeThreshold + WBig * ShadeWarpAmp;
+
+    // Rim
+    float RimK = lerp(0.85 + RimWidthLit * 6.0, 0.85 + RimWidthShadow * 8.0, DarkAmt);
+    float Rim = 1.0 - smoothstep(0.05, 0.15, NdV);
+
+    float RimBoost = Rim * EdgeAttach * lerp(0.06, 0.55, DarkAmt) * EdgeBand;
+    float WarpedT = BaseT + RimBoost;
+
+    // Shadow boundary
+    float IsShadow = step(Lit, WarpedT);
+
+    // 2-tone colors
+    float3 ShadowCol = lerp(BaseColor, float3(0, 0, 0), saturate(ShadeDarken));
+    float3 BaseTone = lerp(BaseColor, ShadowCol, IsShadow);
+
+    float3 Col = BaseTone;
+
+    // Rim darkening
+    float RimDark = lerp(RimLit, RimShadow, DarkAmt) * EdgeAttach;
+    Col = lerp(Col, float3(0, 0, 0), Rim * RimDark * 0.55);
+
+    // Terminator line
+    float Diff = Lit - WarpedT;
+    float AA = max(0.00001, fwidth(Diff));
+    float Line = 1.0 - smoothstep(AA * TermWidth, AA * (TermWidth + 1.0), abs(Diff));
+    Col = lerp(Col, float3(0, 0, 0), Line * saturate(TermInk));
+
+    // Hemisphere light
+    float HemiT = saturate(NW.z * 0.5 + 0.5); // Z is up in UE
+    float3 HemiCol = lerp(GroundColor, SkyColor, HemiT) * HemiIntensity;
+    Col = saturate(Col + HemiCol);
+
+    return Col;
+}
+
+// ============================================================================
+// SNOW ACCUMULATION
+// ============================================================================
+
+// Calculate snow displacement height
+float SnowAccumulation(
+    float3 Position,
+    float3 Normal,
+    float3 UpAxis,
+    float SnowHeight,
+    float SnowNoiseScale,
+    float SnowLayers,
+    float SnowLayerBulge,
+    float SnowLayerSharpness,
+    float SnowSlopeStart,
+    float SnowSlopeEnd,
+    out float SnowAmount
+)
+{
+    float SH = max(0.0, SnowHeight);
+    SnowAmount = 0.0;
+
+    if (SH < 0.00001) return 0.0;
+
+    float3 UpA = normalize(UpAxis);
+    float3 NSnow = Normal;
+    if (dot(NSnow, UpA) < 0.0) NSnow = -NSnow;
+
+    float UpDot = dot(normalize(NSnow), UpA);
+    float SlopeMask = smoothstep(SnowSlopeStart, SnowSlopeEnd, UpDot);
+
+    // Uneven accumulation
+    float2 XZ = Position.xy;
+    float N0 = Noise3D(float3(XZ * SnowNoiseScale, 0.0));
+    float N1 = Noise3D(float3((XZ + float2(13.7, -9.2)) * (SnowNoiseScale * 0.55), 0.0));
+    float Lump = lerp(N0, N1, 0.55);
+
+    float H = SH * SlopeMask * (0.65 + 0.35 * Lump);
+
+    // Layering
+    float LayerH = max(0.0001, SH * 0.25);
+    float T = H / LayerH;
+    float BaseL = floor(T);
+    float Frac = frac(T);
+
+    float Bulge = sin(Frac * 3.1415926);
+    Bulge = pow(max(0.0, Bulge), max(0.5, SnowLayerSharpness));
+
+    float Disp = (BaseL + Bulge * saturate(SnowLayerBulge)) * LayerH;
+
+    float Micro = SignedNoise(float3(XZ * (SnowNoiseScale * 3.2), 1.7));
+    Disp += Micro * LayerH * 0.25 * saturate(SnowLayerBulge);
+
+    Disp = clamp(Disp, 0.0, SH * 1.35);
+
+    SnowAmount = saturate(Disp / max(0.0001, SH)) * SlopeMask;
+
+    return Disp;
+}
+
+// Snow color tint
+float3 ApplySnowTint(float3 BaseColor, float3 SnowTintColor, float SnowAmount, float SnowTintStrength)
+{
+    float SLayer = smoothstep(0.06, 0.22, saturate(SnowAmount));
+    float S = saturate(SLayer * saturate(SnowTintStrength));
+    return lerp(BaseColor, SnowTintColor, S);
+}
