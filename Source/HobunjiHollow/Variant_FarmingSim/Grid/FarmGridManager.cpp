@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "FarmGridManager.h"
+#include "GridFootprintComponent.h"
 #include "DrawDebugHelpers.h"
 
 void UFarmGridManager::Initialize(FSubsystemCollectionBase& Collection)
@@ -371,6 +372,59 @@ bool UFarmGridManager::RemoveObjectByActor(AActor* Object)
 		}
 	}
 	return bRemoved;
+}
+
+UGridFootprintComponent* UFarmGridManager::GetFootprintAtTile(const FGridCoordinate& Coord) const
+{
+	AActor* OccupyingActor = GetObjectAtTile(Coord);
+	if (!OccupyingActor)
+	{
+		return nullptr;
+	}
+
+	return OccupyingActor->FindComponentByClass<UGridFootprintComponent>();
+}
+
+bool UFarmGridManager::HasInteractionAtTile(const FGridCoordinate& Coord) const
+{
+	UGridFootprintComponent* Footprint = GetFootprintAtTile(Coord);
+	if (!Footprint)
+	{
+		return false;
+	}
+
+	// Get the anchor coordinate for this footprint
+	FGridCoordinate AnchorCoord = Footprint->GetRegisteredAnchorCoord();
+
+	// Check if there's an interaction at this specific tile
+	FGridInteractionPoint OutPoint;
+	int32 OutIndex;
+	return Footprint->GetInteractionAtWorldTile(Coord, AnchorCoord, OutPoint, OutIndex);
+}
+
+TArray<AActor*> UFarmGridManager::GetAllInteractableActors() const
+{
+	TArray<AActor*> Result;
+	TSet<AActor*> ProcessedActors;
+
+	for (const auto& Pair : GridCells)
+	{
+		AActor* Actor = Pair.Value.OccupyingActor.Get();
+		if (Actor && !ProcessedActors.Contains(Actor))
+		{
+			ProcessedActors.Add(Actor);
+
+			if (UGridFootprintComponent* Footprint = Actor->FindComponentByClass<UGridFootprintComponent>())
+			{
+				if (Footprint->InteractionPoints.Num() > 0)
+				{
+					Result.Add(Actor);
+				}
+			}
+		}
+	}
+
+	return Result;
 }
 
 bool UFarmGridManager::IsInPlayableBounds(const FGridCoordinate& Coord) const

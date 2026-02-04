@@ -3,6 +3,7 @@
 #include "MapDataImporter.h"
 #include "FarmGridManager.h"
 #include "ObjectClassRegistry.h"
+#include "GridFootprintComponent.h"
 #include "Components/SceneComponent.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonReader.h"
@@ -674,7 +675,17 @@ AActor* AMapDataImporter::SpawnObject(const FMapObjectData& ObjectData)
 		// Register with grid manager
 		if (UFarmGridManager* GridManager = GetGridManager())
 		{
-			GridManager->PlaceObject(SpawnedActor, ObjectData.GetGridCoordinate(), ObjectData.Width, ObjectData.Height);
+			// Check if the actor has a GridFootprintComponent - if so, use it for registration
+			if (UGridFootprintComponent* Footprint = SpawnedActor->FindComponentByClass<UGridFootprintComponent>())
+			{
+				// Use the footprint component's dimensions and register through it
+				Footprint->RegisterWithGrid(GridManager, ObjectData.GetGridCoordinate());
+			}
+			else
+			{
+				// Fallback to JSON-specified dimensions
+				GridManager->PlaceObject(SpawnedActor, ObjectData.GetGridCoordinate(), ObjectData.Width, ObjectData.Height);
+			}
 		}
 	}
 
@@ -728,7 +739,17 @@ AActor* AMapDataImporter::SpawnSpawner(const FMapSpawnerData& SpawnerData)
 	{
 		if (UFarmGridManager* GridManager = GetGridManager())
 		{
-			GridManager->PlaceObject(SpawnedActor, SpawnerData.GetGridCoordinate());
+			// Check if the actor has a GridFootprintComponent - if so, use it for registration
+			if (UGridFootprintComponent* Footprint = SpawnedActor->FindComponentByClass<UGridFootprintComponent>())
+			{
+				// Use the footprint component's dimensions and register through it
+				Footprint->RegisterWithGrid(GridManager, SpawnerData.GetGridCoordinate());
+			}
+			else
+			{
+				// Fallback to 1x1 for spawners without footprint
+				GridManager->PlaceObject(SpawnedActor, SpawnerData.GetGridCoordinate());
+			}
 		}
 	}
 

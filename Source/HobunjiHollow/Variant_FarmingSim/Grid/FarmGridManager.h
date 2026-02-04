@@ -8,6 +8,9 @@
 #include "MapDataTypes.h"
 #include "FarmGridManager.generated.h"
 
+class UGridFootprintComponent;
+struct FGridInteractionPoint;
+
 /**
  * World subsystem that manages the grid state for a level.
  * Handles terrain data, object placement, and spatial queries.
@@ -127,6 +130,20 @@ public:
 	/** Remove an actor by reference (finds and clears all cells it occupies) */
 	UFUNCTION(BlueprintCallable, Category = "Grid")
 	bool RemoveObjectByActor(AActor* Object);
+
+	// ---- Interaction Queries ----
+
+	/** Get the GridFootprintComponent for the object at a coordinate (if any) */
+	UFUNCTION(BlueprintCallable, Category = "Grid|Interaction")
+	UGridFootprintComponent* GetFootprintAtTile(const FGridCoordinate& Coord) const;
+
+	/** Check if there's an interaction point at a coordinate */
+	UFUNCTION(BlueprintCallable, Category = "Grid|Interaction")
+	bool HasInteractionAtTile(const FGridCoordinate& Coord) const;
+
+	/** Get all actors with GridFootprintComponent that have interaction points */
+	UFUNCTION(BlueprintCallable, Category = "Grid|Interaction")
+	TArray<AActor*> GetAllInteractableActors() const;
 
 	// ---- Zone Queries ----
 
