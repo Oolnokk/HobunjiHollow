@@ -1668,7 +1668,7 @@ void AMapDataImporter::RebuildPersistentGridLines()
 	// Draw terrain tiles
 	if (bDrawTerrain)
 	{
-		for (const FMapTerrainTile& Tile : ParsedMapData.TerrainTiles)
+		for (const FMapTerrainTile& Tile : ParsedMapData.Terrain)
 		{
 			if (Tile.X < StartX || Tile.X >= EndX || Tile.Y < StartY || Tile.Y >= EndY)
 			{
@@ -1741,7 +1741,7 @@ void AMapDataImporter::GenerateBlockedCollision()
 	int32 BlockedCount = 0;
 
 	// Create collision boxes for blocked tiles
-	for (const FMapTerrainTile& Tile : ParsedMapData.TerrainTiles)
+	for (const FMapTerrainTile& Tile : ParsedMapData.Terrain)
 	{
 		if (Tile.Type != TEXT("blocked"))
 		{
