@@ -16,7 +16,20 @@
   "defaultTerrain": "grass",
   "layers": {
     "terrain": [],
-    "objects": [],
+    "objects": [
+      {
+        "id": "spearhead_house",
+        "type": "object",
+        "objectClass": "house_small",
+        "x": 40,
+        "y": 32,
+        "rotation": 0,
+        "properties": {
+          "ownerId": "Spearhead",
+          "description": "Spearhead's house"
+        }
+      }
+    ],
     "zones": [
       {
         "id": "playable_area",
