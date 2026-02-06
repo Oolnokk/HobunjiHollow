@@ -160,17 +160,17 @@ FBox UGridFootprintComponent::GetFootprintBounds() const
 	FVector Corner3 = ComponentRotation.RotateVector(FVector(MaxX, MaxY, 0)) + ComponentLocation;
 	FVector Corner4 = ComponentRotation.RotateVector(FVector(MinX, MaxY, 0)) + ComponentLocation;
 
-	FBox Bounds(ForceInit);
-	Bounds += Corner1;
-	Bounds += Corner2;
-	Bounds += Corner3;
-	Bounds += Corner4;
+	FBox FootprintBounds(ForceInit);
+	FootprintBounds += Corner1;
+	FootprintBounds += Corner2;
+	FootprintBounds += Corner3;
+	FootprintBounds += Corner4;
 
 	// Add some height
-	Bounds.Min.Z -= 10.0f;
-	Bounds.Max.Z += 200.0f;
+	FootprintBounds.Min.Z -= 10.0f;
+	FootprintBounds.Max.Z += 200.0f;
 
-	return Bounds;
+	return FootprintBounds;
 }
 
 bool UGridFootprintComponent::IsTileInFootprint(const FIntPoint& TileOffset) const
@@ -572,14 +572,6 @@ void UGridFootprintComponent::PostEditChangeProperty(FPropertyChangedEvent& Prop
 
 	// Force bounds recalculation
 	UpdateBounds();
-}
-
-FPrimitiveSceneProxy* UGridFootprintComponent::CreateSceneProxy()
-{
-	// For now, we use debug draw instead of a scene proxy
-	// A full implementation would create a custom FPrimitiveSceneProxy
-	// for more efficient persistent visualization
-	return nullptr;
 }
 
 FBoxSphereBounds UGridFootprintComponent::CalcBounds(const FTransform& LocalToWorld) const
