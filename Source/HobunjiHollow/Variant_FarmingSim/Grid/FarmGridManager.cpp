@@ -2,7 +2,11 @@
 
 #include "FarmGridManager.h"
 #include "GridFootprintComponent.h"
+#include "GridPlaceableCrop.h"
+#include "Save/FarmingWorldSaveGame.h"
 #include "DrawDebugHelpers.h"
+#include "Kismet/GameplayStatics.h"
+#include "EngineUtils.h"
 
 void UFarmGridManager::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -1077,4 +1081,161 @@ void UFarmGridManager::DrawDebugZones(float Duration) const
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("DrawDebugZones: Drew %d zones"), Zones.Num());
+}
+
+// ---- Crop Management ----
+
+AGridPlaceableCrop* UFarmGridManager::PlantCrop(TSubclassOf<AGridPlaceableCrop> CropClass, const FGridCoordinate& Coord)
+{
+	UWorld* World = GetWorld();
+	if (!World || !CropClass)
+	{
+		return nullptr;
+	}
+
+	// Check if we can plant here
+	EPlacementResult PlaceResult = CanPlaceObject(Coord, 1, 1, true);
+	if (PlaceResult != EPlacementResult::Success)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("PlantCrop: Cannot plant at (%d, %d) - placement failed"), Coord.X, Coord.Y);
+		return nullptr;
+	}
+
+	// Check if tile is tilled
+	FGridCell CellData = GetCellData(Coord);
+	if (!CellData.bIsTilled)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("PlantCrop: Cannot plant at (%d, %d) - tile not tilled"), Coord.X, Coord.Y);
+		return nullptr;
+	}
+
+	// Spawn the crop
+	FVector SpawnLocation = GridToWorldWithHeight(Coord);
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	AGridPlaceableCrop* Crop = World->SpawnActor<AGridPlaceableCrop>(CropClass, SpawnLocation, FRotator::ZeroRotator, SpawnParams);
+	if (Crop)
+	{
+		Crop->SetGridPosition(Coord);
+		PlaceObject(Crop, Coord, 1, 1);
+		UE_LOG(LogTemp, Log, TEXT("PlantCrop: Planted %s at (%d, %d)"), *Crop->CropTypeId.ToString(), Coord.X, Coord.Y);
+	}
+
+	return Crop;
+}
+
+TArray<AGridPlaceableCrop*> UFarmGridManager::GetAllCrops() const
+{
+	TArray<AGridPlaceableCrop*> Crops;
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return Crops;
+	}
+
+	for (TActorIterator<AGridPlaceableCrop> It(World); It; ++It)
+	{
+		AGridPlaceableCrop* Crop = *It;
+		if (Crop && !Crop->IsPendingKillPending())
+		{
+			Crops.Add(Crop);
+		}
+	}
+
+	return Crops;
+}
+
+void UFarmGridManager::SaveCropsToWorldSave(UFarmingWorldSaveGame* WorldSave)
+{
+	if (!WorldSave)
+	{
+		return;
+	}
+
+	WorldSave->PlacedCrops.Empty();
+
+	TArray<AGridPlaceableCrop*> Crops = GetAllCrops();
+	for (AGridPlaceableCrop* Crop : Crops)
+	{
+		if (!Crop)
+		{
+			continue;
+		}
+
+		FPlacedCropSave CropSave;
+		CropSave.GridX = Crop->GridPosition.X;
+		CropSave.GridY = Crop->GridPosition.Y;
+		CropSave.CropTypeId = Crop->CropTypeId;
+		CropSave.GrowthStage = static_cast<int32>(Crop->GrowthStage);
+		CropSave.DaysGrown = Crop->DaysGrown;
+		CropSave.bWateredToday = Crop->bWateredToday;
+		CropSave.TotalDaysWatered = Crop->TotalDaysWatered;
+
+		WorldSave->PlacedCrops.Add(CropSave);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("SaveCropsToWorldSave: Saved %d crops"), WorldSave->PlacedCrops.Num());
+}
+
+void UFarmGridManager::RestoreCropsFromWorldSave(UFarmingWorldSaveGame* WorldSave, TSubclassOf<AGridPlaceableCrop> DefaultCropClass)
+{
+	UWorld* World = GetWorld();
+	if (!World || !WorldSave)
+	{
+		return;
+	}
+
+	// Destroy existing crops first
+	TArray<AGridPlaceableCrop*> ExistingCrops = GetAllCrops();
+	for (AGridPlaceableCrop* Crop : ExistingCrops)
+	{
+		if (Crop)
+		{
+			RemoveObjectByActor(Crop);
+			Crop->Destroy();
+		}
+	}
+
+	// Spawn crops from save data
+	for (const FPlacedCropSave& CropSave : WorldSave->PlacedCrops)
+	{
+		FGridCoordinate Coord(CropSave.GridX, CropSave.GridY);
+
+		// Spawn crop - for now using default class, could be extended to use registry
+		FVector SpawnLocation = GridToWorldWithHeight(Coord);
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+		AGridPlaceableCrop* Crop = World->SpawnActor<AGridPlaceableCrop>(DefaultCropClass, SpawnLocation, FRotator::ZeroRotator, SpawnParams);
+		if (Crop)
+		{
+			Crop->SetGridPosition(Coord);
+			Crop->InitializeFromSaveData(
+				CropSave.CropTypeId,
+				CropSave.GrowthStage,
+				CropSave.DaysGrown,
+				CropSave.bWateredToday,
+				CropSave.TotalDaysWatered
+			);
+			PlaceObject(Crop, Coord, 1, 1);
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("RestoreCropsFromWorldSave: Restored %d crops"), WorldSave->PlacedCrops.Num());
+}
+
+void UFarmGridManager::OnDayAdvanceForCrops(int32 CurrentSeason)
+{
+	TArray<AGridPlaceableCrop*> Crops = GetAllCrops();
+	for (AGridPlaceableCrop* Crop : Crops)
+	{
+		if (Crop)
+		{
+			Crop->OnDayAdvance(CurrentSeason);
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("OnDayAdvanceForCrops: Updated %d crops for new day"), Crops.Num());
 }

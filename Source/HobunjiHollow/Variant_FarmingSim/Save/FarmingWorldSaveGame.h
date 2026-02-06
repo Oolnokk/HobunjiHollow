@@ -44,6 +44,43 @@ struct FStoryChoiceSave
 };
 
 /**
+ * Saved crop data for persistence
+ */
+USTRUCT(BlueprintType)
+struct FPlacedCropSave
+{
+	GENERATED_BODY()
+
+	/** Grid X coordinate */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save")
+	int32 GridX = 0;
+
+	/** Grid Y coordinate */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save")
+	int32 GridY = 0;
+
+	/** Crop type identifier (e.g., "parsnip", "potato", "cauliflower") */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save")
+	FName CropTypeId;
+
+	/** Current growth stage (0 = seed, higher = more grown) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save")
+	int32 GrowthStage = 0;
+
+	/** Days since planted */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save")
+	int32 DaysGrown = 0;
+
+	/** Was the crop watered today */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save")
+	bool bWateredToday = false;
+
+	/** Total days watered (affects quality) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save")
+	int32 TotalDaysWatered = 0;
+};
+
+/**
  * World save game
  * Stores world-specific data:
  * - Time/calendar state
@@ -107,6 +144,10 @@ public:
 	/** Time played in this world (in seconds) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Stats")
 	float PlayTime = 0.f;
+
+	/** Placed crops on the farm */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Farm")
+	TArray<FPlacedCropSave> PlacedCrops;
 
 	/** Initialize a new world save */
 	UFUNCTION(BlueprintCallable, Category = "Save")
