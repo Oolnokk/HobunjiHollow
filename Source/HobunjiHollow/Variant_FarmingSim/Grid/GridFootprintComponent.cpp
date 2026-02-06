@@ -14,9 +14,30 @@ UGridFootprintComponent::UGridFootprintComponent()
 	bWantsOnUpdateTransform = true;
 
 #if WITH_EDITORONLY_DATA
-	// Enable editor tick for visualization
-	bTickInEditor = true;
+	EditorLineBatch = nullptr;
 #endif
+}
+
+void UGridFootprintComponent::OnRegister()
+{
+	Super::OnRegister();
+
+#if WITH_EDITORONLY_DATA
+	if (!GetWorld() || !GetWorld()->IsGameWorld())
+	{
+		CreateEditorVisualization();
+		RebuildEditorVisualization();
+	}
+#endif
+}
+
+void UGridFootprintComponent::OnUnregister()
+{
+#if WITH_EDITORONLY_DATA
+	DestroyEditorVisualization();
+#endif
+
+	Super::OnUnregister();
 }
 
 void UGridFootprintComponent::BeginPlay()
@@ -45,30 +66,13 @@ void UGridFootprintComponent::TickComponent(float DeltaTime, ELevelTick TickType
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-#if WITH_EDITOR
-	if (GetWorld() && !GetWorld()->IsGameWorld())
+	// Runtime tick - use debug draw for runtime visualization
+	if (GetWorld() && GetWorld()->IsGameWorld() && bShowFootprintAtRuntime)
 	{
-		// Editor tick - always draw if enabled
-		if (bShowFootprintInEditor)
-		{
-			DrawFootprintVisualization();
-		}
+		DrawFootprintVisualization();
 		if (bShowInteractionPoints)
 		{
 			DrawInteractionPointVisualization();
-		}
-	}
-	else
-#endif
-	{
-		// Runtime tick
-		if (bShowFootprintAtRuntime)
-		{
-			DrawFootprintVisualization();
-			if (bShowInteractionPoints)
-			{
-				DrawInteractionPointVisualization();
-			}
 		}
 	}
 }
@@ -555,6 +559,156 @@ void UGridFootprintComponent::DrawInteractionPointVisualization()
 	}
 }
 
+// ---- Editor Visualization ----
+
+#if WITH_EDITORONLY_DATA
+void UGridFootprintComponent::CreateEditorVisualization()
+{
+	if (EditorLineBatch)
+	{
+		return; // Already created
+	}
+
+	AActor* Owner = GetOwner();
+	if (!Owner)
+	{
+		return;
+	}
+
+	EditorLineBatch = NewObject<ULineBatchComponent>(Owner, NAME_None, RF_Transient);
+	if (EditorLineBatch)
+	{
+		EditorLineBatch->SetupAttachment(this);
+		EditorLineBatch->SetVisibility(bShowFootprintInEditor);
+		EditorLineBatch->SetHiddenInGame(true);
+		EditorLineBatch->RegisterComponent();
+	}
+}
+
+void UGridFootprintComponent::DestroyEditorVisualization()
+{
+	if (EditorLineBatch)
+	{
+		EditorLineBatch->DestroyComponent();
+		EditorLineBatch = nullptr;
+	}
+}
+#endif
+
+void UGridFootprintComponent::RebuildEditorVisualization()
+{
+#if WITH_EDITORONLY_DATA
+	if (!EditorLineBatch)
+	{
+		return;
+	}
+
+	// Clear existing lines
+	EditorLineBatch->Flush();
+
+	if (!bShowFootprintInEditor)
+	{
+		EditorLineBatch->SetVisibility(false);
+		return;
+	}
+
+	EditorLineBatch->SetVisibility(true);
+
+	FVector ComponentLocation = GetComponentLocation();
+	FRotator ComponentRotation = GetComponentRotation();
+	float DrawZ = ComponentLocation.Z + VisualizationHeightOffset;
+	float LineLifetime = -1.0f; // Persistent
+
+	// Draw each tile
+	for (int32 Y = 0; Y < TileHeight; ++Y)
+	{
+		for (int32 X = 0; X < TileWidth; ++X)
+		{
+			int32 OffsetX = X - AnchorTile.X;
+			int32 OffsetY = Y - AnchorTile.Y;
+
+			float LocalMinX = OffsetX * TileSize;
+			float LocalMinY = OffsetY * TileSize;
+			float LocalMaxX = LocalMinX + TileSize;
+			float LocalMaxY = LocalMinY + TileSize;
+
+			FVector Corner1 = ComponentRotation.RotateVector(FVector(LocalMinX, LocalMinY, 0)) + ComponentLocation;
+			FVector Corner2 = ComponentRotation.RotateVector(FVector(LocalMaxX, LocalMinY, 0)) + ComponentLocation;
+			FVector Corner3 = ComponentRotation.RotateVector(FVector(LocalMaxX, LocalMaxY, 0)) + ComponentLocation;
+			FVector Corner4 = ComponentRotation.RotateVector(FVector(LocalMinX, LocalMaxY, 0)) + ComponentLocation;
+
+			Corner1.Z = Corner2.Z = Corner3.Z = Corner4.Z = DrawZ;
+
+			// Anchor tile is different color
+			FLinearColor TileColor = (X == AnchorTile.X && Y == AnchorTile.Y)
+				? FLinearColor(AnchorColor)
+				: FLinearColor(FootprintColor);
+			float Thickness = (X == AnchorTile.X && Y == AnchorTile.Y) ? 3.0f : 2.0f;
+
+			EditorLineBatch->DrawLine(Corner1, Corner2, TileColor, 0, Thickness, LineLifetime);
+			EditorLineBatch->DrawLine(Corner2, Corner3, TileColor, 0, Thickness, LineLifetime);
+			EditorLineBatch->DrawLine(Corner3, Corner4, TileColor, 0, Thickness, LineLifetime);
+			EditorLineBatch->DrawLine(Corner4, Corner1, TileColor, 0, Thickness, LineLifetime);
+		}
+	}
+
+	// Draw outer boundary with thicker line
+	float MinX = -AnchorTile.X * TileSize;
+	float MinY = -AnchorTile.Y * TileSize;
+	float MaxX = (TileWidth - AnchorTile.X) * TileSize;
+	float MaxY = (TileHeight - AnchorTile.Y) * TileSize;
+
+	FVector OuterCorner1 = ComponentRotation.RotateVector(FVector(MinX, MinY, 0)) + ComponentLocation;
+	FVector OuterCorner2 = ComponentRotation.RotateVector(FVector(MaxX, MinY, 0)) + ComponentLocation;
+	FVector OuterCorner3 = ComponentRotation.RotateVector(FVector(MaxX, MaxY, 0)) + ComponentLocation;
+	FVector OuterCorner4 = ComponentRotation.RotateVector(FVector(MinX, MaxY, 0)) + ComponentLocation;
+
+	OuterCorner1.Z = OuterCorner2.Z = OuterCorner3.Z = OuterCorner4.Z = DrawZ;
+
+	FLinearColor OuterColor = FLinearColor(FootprintColor);
+	EditorLineBatch->DrawLine(OuterCorner1, OuterCorner2, OuterColor, 0, 4.0f, LineLifetime);
+	EditorLineBatch->DrawLine(OuterCorner2, OuterCorner3, OuterColor, 0, 4.0f, LineLifetime);
+	EditorLineBatch->DrawLine(OuterCorner3, OuterCorner4, OuterColor, 0, 4.0f, LineLifetime);
+	EditorLineBatch->DrawLine(OuterCorner4, OuterCorner1, OuterColor, 0, 4.0f, LineLifetime);
+
+	// Draw interaction points
+	if (bShowInteractionPoints)
+	{
+		for (int32 i = 0; i < InteractionPoints.Num(); ++i)
+		{
+			const FGridInteractionPoint& Point = InteractionPoints[i];
+
+			FVector TilePos = GetTileWorldPosition(Point.TileOffset);
+			TilePos.Z = DrawZ + 10.0f;
+
+			float MarkerSize = TileSize * 0.3f;
+			FLinearColor MarkerColor = Point.bEnabled
+				? FLinearColor(InteractionColor)
+				: FLinearColor(0.5f, 0.5f, 0.5f, 0.8f);
+
+			// Draw diamond shape
+			FVector North = TilePos + FVector(0, -MarkerSize, 0);
+			FVector South = TilePos + FVector(0, MarkerSize, 0);
+			FVector East = TilePos + FVector(MarkerSize, 0, 0);
+			FVector West = TilePos + FVector(-MarkerSize, 0, 0);
+
+			EditorLineBatch->DrawLine(North, East, MarkerColor, 0, 3.0f, LineLifetime);
+			EditorLineBatch->DrawLine(East, South, MarkerColor, 0, 3.0f, LineLifetime);
+			EditorLineBatch->DrawLine(South, West, MarkerColor, 0, 3.0f, LineLifetime);
+			EditorLineBatch->DrawLine(West, North, MarkerColor, 0, 3.0f, LineLifetime);
+
+			// Draw approach direction indicator
+			FVector ApproachPos = GetInteractionApproachPosition(i);
+			ApproachPos.Z = TilePos.Z;
+			FVector ArrowEnd = TilePos + (TilePos - ApproachPos).GetSafeNormal() * (TileSize * 0.2f);
+			EditorLineBatch->DrawLine(ApproachPos, ArrowEnd, MarkerColor, 0, 2.0f, LineLifetime);
+		}
+	}
+
+	EditorLineBatch->MarkRenderStateDirty();
+#endif
+}
+
 #if WITH_EDITOR
 void UGridFootprintComponent::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
@@ -569,6 +723,9 @@ void UGridFootprintComponent::PostEditChangeProperty(FPropertyChangedEvent& Prop
 			UE_LOG(LogTemp, Warning, TEXT("GridFootprintComponent: %s"), *Error);
 		}
 	}
+
+	// Rebuild editor visualization when properties change
+	RebuildEditorVisualization();
 
 	// Force bounds recalculation
 	UpdateBounds();

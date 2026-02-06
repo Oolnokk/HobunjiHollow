@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/SceneComponent.h"
+#include "Components/LineBatchComponent.h"
 #include "GridTypes.h"
 #include "GridFootprintComponent.generated.h"
 
@@ -264,19 +265,31 @@ protected:
 	UPROPERTY()
 	TWeakObjectPtr<UFarmGridManager> RegisteredGridManager;
 
-	/** Draw the footprint visualization */
+	/** Draw the footprint visualization (runtime debug draw) */
 	void DrawFootprintVisualization();
 
-	/** Draw interaction point markers */
+	/** Draw interaction point markers (runtime debug draw) */
 	void DrawInteractionPointVisualization();
 
+	/** Rebuild the editor line batch visualization */
+	void RebuildEditorVisualization();
+
 #if WITH_EDITORONLY_DATA
-	/** Primitive component for editor visualization */
+	/** Line batch component for persistent editor visualization */
 	UPROPERTY()
-	class UPrimitiveComponent* EditorVisualizationComponent;
+	ULineBatchComponent* EditorLineBatch;
+
+	/** Create and setup the editor visualization component */
+	void CreateEditorVisualization();
+
+	/** Destroy the editor visualization component */
+	void DestroyEditorVisualization();
 #endif
 
 public:
+	virtual void OnRegister() override;
+	virtual void OnUnregister() override;
+
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
