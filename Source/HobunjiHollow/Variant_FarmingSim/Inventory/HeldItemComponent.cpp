@@ -5,6 +5,8 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
 #include "Engine/DataTable.h"
+#include "../Grid/FarmGridManager.h"
+#include "../Grid/GridPlaceableCrop.h"
 
 UHeldItemComponent::UHeldItemComponent()
 {
@@ -461,8 +463,79 @@ FItemActionResult UHeldItemComponent::DoPlaceAction(AActor* Target)
 
 	if (Data->Category == EItemCategory::Seed)
 	{
-		// TODO: Interface with FarmGridManager to plant crop
-		UE_LOG(LogTemp, Log, TEXT("HeldItemComponent: Would plant %s"), *Data->CropToPlant.ToString());
+		// Get the FarmGridManager
+		UWorld* World = GetWorld();
+		if (!World)
+		{
+			return FItemActionResult::Failure(FText::FromString("No world"));
+		}
+
+		UFarmGridManager* GridManager = World->GetSubsystem<UFarmGridManager>();
+		if (!GridManager)
+		{
+			return FItemActionResult::Failure(FText::FromString("No grid manager"));
+		}
+
+		// Get grid position in front of the player
+		AActor* Owner = GetOwner();
+		if (!Owner)
+		{
+			return FItemActionResult::Failure(FText::FromString("No owner"));
+		}
+
+		// Use the position slightly in front of the player
+		FVector PlantPosition = Owner->GetActorLocation() + Owner->GetActorForwardVector() * GridManager->GetCellSize();
+		FGridCoordinate GridCoord = GridManager->WorldToGrid(PlantPosition);
+
+		// Check if tile is valid and tilled
+		if (!GridManager->IsValidCoordinate(GridCoord))
+		{
+			return FItemActionResult::Failure(FText::FromString("Cannot plant here"));
+		}
+
+		FGridCell Cell = GridManager->GetCellData(GridCoord);
+		if (!Cell.bIsTilled)
+		{
+			return FItemActionResult::Failure(FText::FromString("Soil must be tilled first"));
+		}
+
+		if (GridManager->IsTileOccupied(GridCoord))
+		{
+			return FItemActionResult::Failure(FText::FromString("Something is already planted here"));
+		}
+
+		// Load and spawn the crop class
+		if (Data->CropClass.IsNull())
+		{
+			UE_LOG(LogTemp, Warning, TEXT("HeldItemComponent: Seed %s has no CropClass assigned"), *HeldSlot.ItemID.ToString());
+			return FItemActionResult::Failure(FText::FromString("Seed has no crop type"));
+		}
+
+		UClass* CropClassLoaded = Data->CropClass.LoadSynchronous();
+		if (!CropClassLoaded)
+		{
+			return FItemActionResult::Failure(FText::FromString("Failed to load crop"));
+		}
+
+		TSubclassOf<AGridPlaceableCrop> CropSubclass = CropClassLoaded;
+		if (!CropSubclass)
+		{
+			return FItemActionResult::Failure(FText::FromString("Invalid crop class"));
+		}
+
+		// Plant the crop
+		AGridPlaceableCrop* PlantedCrop = GridManager->PlantCrop(CropSubclass, GridCoord);
+		if (!PlantedCrop)
+		{
+			return FItemActionResult::Failure(FText::FromString("Failed to plant crop"));
+		}
+
+		// Set the crop type ID for saving
+		PlantedCrop->CropTypeId = Data->CropToPlant;
+
+		UE_LOG(LogTemp, Log, TEXT("HeldItemComponent: Planted %s at (%d, %d)"),
+			*Data->CropToPlant.ToString(), GridCoord.X, GridCoord.Y);
+
 		return FItemActionResult::Success(FText::FromString("Planted seed"), true, 1);
 	}
 

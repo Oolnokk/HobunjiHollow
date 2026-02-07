@@ -131,9 +131,13 @@ struct HOBUNJIHOLLOW_API FItemData : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item", meta = (EditCondition = "bStackable", ClampMin = "1"))
 	int32 MaxStackSize = 99;
 
-	/** For seeds: which crop to plant */
+	/** For seeds: which crop to plant (ID for save system) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item|Seed", meta = (EditCondition = "Category == EItemCategory::Seed"))
 	FName CropToPlant;
+
+	/** For seeds: the crop Blueprint class to spawn */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item|Seed", meta = (EditCondition = "Category == EItemCategory::Seed"))
+	TSoftClassPtr<AActor> CropClass;
 
 	/** For food: stamina restored */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item|Food", meta = (EditCondition = "Category == EItemCategory::Food"))
