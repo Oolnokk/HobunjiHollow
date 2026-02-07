@@ -54,6 +54,20 @@ void UFarmGridManager::InitializeFromMapData(const FMapData& MapData)
 		{
 			FGridCell& Cell = GetOrCreateCell(Coord);
 			Cell.TerrainType = Tile.GetTerrainType();
+
+			// Check for tilled property
+			const FString* TilledValue = Tile.Properties.Find(TEXT("tilled"));
+			if (TilledValue && (*TilledValue == TEXT("true") || *TilledValue == TEXT("1")))
+			{
+				Cell.bIsTilled = true;
+			}
+
+			// Check for watered property
+			const FString* WateredValue = Tile.Properties.Find(TEXT("watered"));
+			if (WateredValue && (*WateredValue == TEXT("true") || *WateredValue == TEXT("1")))
+			{
+				Cell.bIsWatered = true;
+			}
 		}
 	}
 
