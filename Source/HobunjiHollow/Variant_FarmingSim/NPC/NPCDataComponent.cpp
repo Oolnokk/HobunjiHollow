@@ -442,21 +442,36 @@ int32 UNPCDataComponent::GetAffectionForGiftPreference(EGiftPreference Preferenc
 }
 
 bool UNPCDataComponent::GetGreeting(int32 Season, int32 DayOfWeek, const FString& Weather,
-	const FString& Location, FNPCDialogueLine& OutDialogue)
+	const FString& Location, const FString& PlayerName, const FString& PlayerSpeciesId,
+	const FString& HeldItemId, const TMap<FString, int32>& QuestProgress,
+	const TMap<FString, int32>& TagGroupFriendship, FNPCDialogueLine& OutDialogue)
 {
-	return GetDialogue(TEXT("greeting"), Season, DayOfWeek, Weather, Location, OutDialogue);
+	return GetDialogue(TEXT("greeting"), Season, DayOfWeek, Weather, Location, PlayerName,
+		PlayerSpeciesId, HeldItemId, QuestProgress, TagGroupFriendship, OutDialogue);
 }
 
 bool UNPCDataComponent::GetDialogue(const FString& Category, int32 Season, int32 DayOfWeek,
-	const FString& Weather, const FString& Location, FNPCDialogueLine& OutDialogue)
+	const FString& Weather, const FString& Location, const FString& PlayerName,
+	const FString& PlayerSpeciesId, const FString& HeldItemId,
+	const TMap<FString, int32>& QuestProgress, const TMap<FString, int32>& TagGroupFriendship,
+	FNPCDialogueLine& OutDialogue)
 {
 	if (!LoadedData)
 	{
 		return false;
 	}
 
-	return LoadedData->GetBestDialogue(Category, GetCurrentHearts(), Season, DayOfWeek,
-		Weather, Location, TriggeredFlags, OutDialogue);
+	FNPCDialogueRuntimeContext RuntimeContext;
+	RuntimeContext.CurrentHearts = GetCurrentHearts();
+	RuntimeContext.ActiveFlags = TriggeredFlags;
+	RuntimeContext.PlayerName = PlayerName;
+	RuntimeContext.PlayerSpeciesId = PlayerSpeciesId;
+	RuntimeContext.HeldItemId = HeldItemId;
+	RuntimeContext.QuestProgress = QuestProgress;
+	RuntimeContext.TagGroupFriendship = TagGroupFriendship;
+
+	return LoadedData->GetBestDialogue(Category, Season, DayOfWeek, Weather, Location,
+		RuntimeContext, OutDialogue);
 }
 
 void UNPCDataComponent::RecordConversation()
