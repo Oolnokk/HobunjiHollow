@@ -174,12 +174,17 @@ public:
 	/** Get a greeting dialogue line */
 	UFUNCTION(BlueprintCallable, Category = "NPC Data|Dialogue")
 	bool GetGreeting(int32 Season, int32 DayOfWeek, const FString& Weather,
-		const FString& Location, FNPCDialogueLine& OutDialogue);
+		const FString& Location, const FString& PlayerName, const FString& PlayerSpeciesId,
+		const FString& HeldItemId, const TMap<FString, int32>& QuestProgress,
+		const TMap<FString, int32>& TagGroupFriendship, FNPCDialogueLine& OutDialogue);
 
 	/** Get dialogue for a specific category */
 	UFUNCTION(BlueprintCallable, Category = "NPC Data|Dialogue")
 	bool GetDialogue(const FString& Category, int32 Season, int32 DayOfWeek,
-		const FString& Weather, const FString& Location, FNPCDialogueLine& OutDialogue);
+		const FString& Weather, const FString& Location, const FString& PlayerName,
+		const FString& PlayerSpeciesId, const FString& HeldItemId,
+		const TMap<FString, int32>& QuestProgress, const TMap<FString, int32>& TagGroupFriendship,
+		FNPCDialogueLine& OutDialogue);
 
 	/** Record that player talked to this NPC */
 	UFUNCTION(BlueprintCallable, Category = "NPC Data|Dialogue")

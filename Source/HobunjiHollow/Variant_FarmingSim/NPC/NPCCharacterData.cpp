@@ -2,6 +2,132 @@
 
 #include "NPCCharacterData.h"
 
+namespace
+{
+bool DoesDialogueConditionMatch(const FNPCDialogueCondition& Condition, const FNPCDialogueRuntimeContext& RuntimeContext)
+{
+	if (!Condition.QuestId.IsEmpty())
+	{
+		const int32* QuestProgress = RuntimeContext.QuestProgress.Find(Condition.QuestId);
+		if (!QuestProgress)
+		{
+			return false;
+		}
+		if (Condition.MinQuestProgress > 0 && *QuestProgress < Condition.MinQuestProgress)
+		{
+			return false;
+		}
+		if (Condition.MaxQuestProgress > 0 && *QuestProgress > Condition.MaxQuestProgress)
+		{
+			return false;
+		}
+	}
+
+	if (Condition.MinFriendshipHearts > 0 && RuntimeContext.CurrentHearts < Condition.MinFriendshipHearts)
+	{
+		return false;
+	}
+	if (Condition.MaxFriendshipHearts > 0 && RuntimeContext.CurrentHearts > Condition.MaxFriendshipHearts)
+	{
+		return false;
+	}
+
+	if (!Condition.FriendshipTagGroup.IsEmpty())
+	{
+		const int32* TagFriendship = RuntimeContext.TagGroupFriendship.Find(Condition.FriendshipTagGroup);
+		if (!TagFriendship)
+		{
+			return false;
+		}
+		if (Condition.MinTagGroupFriendship > 0 && *TagFriendship < Condition.MinTagGroupFriendship)
+		{
+			return false;
+		}
+		if (Condition.MaxTagGroupFriendship > 0 && *TagFriendship > Condition.MaxTagGroupFriendship)
+		{
+			return false;
+		}
+	}
+
+	if (!Condition.RequiredPlayerSpeciesId.IsEmpty()
+		&& Condition.RequiredPlayerSpeciesId != RuntimeContext.PlayerSpeciesId)
+	{
+		return false;
+	}
+
+	if (!Condition.RequiredHeldItemId.IsEmpty()
+		&& Condition.RequiredHeldItemId != RuntimeContext.HeldItemId)
+	{
+		return false;
+	}
+
+	for (const FString& RequiredFlag : Condition.RequiredFlags)
+	{
+		if (!RuntimeContext.ActiveFlags.Contains(RequiredFlag))
+		{
+			return false;
+		}
+	}
+
+	for (const FString& BlockingFlag : Condition.BlockingFlags)
+	{
+		if (RuntimeContext.ActiveFlags.Contains(BlockingFlag))
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+TMap<FString, FString> BuildTokenMap(const FNPCDialogueRuntimeContext& RuntimeContext,
+	const TArray<FNPCDialogueToken>& NodeTokens)
+{
+	TMap<FString, FString> Tokens;
+	Tokens.Add(TEXT("player_name"), RuntimeContext.PlayerName);
+	Tokens.Add(TEXT("held_item_id"), RuntimeContext.HeldItemId);
+	Tokens.Add(TEXT("player_species_id"), RuntimeContext.PlayerSpeciesId);
+
+	for (const FNPCDialogueToken& Token : NodeTokens)
+	{
+		if (!Token.Token.IsEmpty())
+		{
+			Tokens.Add(Token.Token, Token.Replacement);
+		}
+	}
+
+	return Tokens;
+}
+
+FString ReplaceDialogueTokens(const FString& Source, const TMap<FString, FString>& Tokens)
+{
+	FString Result = Source;
+	for (const TPair<FString, FString>& TokenPair : Tokens)
+	{
+		const FString TokenKey = FString::Printf(TEXT("{%s}"), *TokenPair.Key);
+		Result.ReplaceInline(*TokenKey, *TokenPair.Value, ESearchCase::IgnoreCase);
+	}
+	return Result;
+}
+
+void AppendDialogueNodeText(const FNPCDialogueNode& Node, const FNPCDialogueRuntimeContext& RuntimeContext, FString& InOutText)
+{
+	if (!DoesDialogueConditionMatch(Node.Condition, RuntimeContext))
+	{
+		return;
+	}
+
+	const TMap<FString, FString> Tokens = BuildTokenMap(RuntimeContext, Node.Tokens);
+	const FString NodeText = ReplaceDialogueTokens(Node.Text.ToString(), Tokens);
+	InOutText.Append(NodeText);
+
+	for (const FNPCDialogueNode& Child : Node.Children)
+	{
+		AppendDialogueNodeText(Child, RuntimeContext, InOutText);
+	}
+}
+} // namespace
+
 EGiftPreference UNPCCharacterData::GetGiftPreference(const FString& ItemId) const
 {
 	// Check specific gift responses first
@@ -47,9 +173,9 @@ TArray<FNPCDialogueLine> UNPCCharacterData::GetDialogueForCategory(const FString
 	return TArray<FNPCDialogueLine>();
 }
 
-bool UNPCCharacterData::GetBestDialogue(const FString& Category, int32 CurrentHearts, int32 CurrentSeason,
+bool UNPCCharacterData::GetBestDialogue(const FString& Category, int32 CurrentSeason,
 	int32 CurrentDayOfWeek, const FString& CurrentWeather, const FString& CurrentLocation,
-	const TArray<FString>& ActiveFlags, FNPCDialogueLine& OutDialogue) const
+	const FNPCDialogueRuntimeContext& RuntimeContext, FNPCDialogueLine& OutDialogue) const
 {
 	TArray<FNPCDialogueLine> CategoryLines = GetDialogueForCategory(Category);
 
@@ -65,11 +191,11 @@ bool UNPCCharacterData::GetBestDialogue(const FString& Category, int32 CurrentHe
 	for (const FNPCDialogueLine& Line : CategoryLines)
 	{
 		// Check heart requirements
-		if (Line.MinHearts > 0 && CurrentHearts < Line.MinHearts)
+		if (Line.MinHearts > 0 && RuntimeContext.CurrentHearts < Line.MinHearts)
 		{
 			continue;
 		}
-		if (Line.MaxHearts > 0 && CurrentHearts > Line.MaxHearts)
+		if (Line.MaxHearts > 0 && RuntimeContext.CurrentHearts > Line.MaxHearts)
 		{
 			continue;
 		}
@@ -99,13 +225,13 @@ bool UNPCCharacterData::GetBestDialogue(const FString& Category, int32 CurrentHe
 		}
 
 		// Check required flag
-		if (!Line.RequiredFlag.IsEmpty() && !ActiveFlags.Contains(Line.RequiredFlag))
+		if (!Line.RequiredFlag.IsEmpty() && !RuntimeContext.ActiveFlags.Contains(Line.RequiredFlag))
 		{
 			continue;
 		}
 
 		// Check blocking flag
-		if (!Line.BlockingFlag.IsEmpty() && ActiveFlags.Contains(Line.BlockingFlag))
+		if (!Line.BlockingFlag.IsEmpty() && RuntimeContext.ActiveFlags.Contains(Line.BlockingFlag))
 		{
 			continue;
 		}
@@ -131,6 +257,14 @@ bool UNPCCharacterData::GetBestDialogue(const FString& Category, int32 CurrentHe
 	// Pick a random line from highest priority matches
 	int32 RandomIndex = FMath::RandRange(0, MatchingLines.Num() - 1);
 	OutDialogue = *MatchingLines[RandomIndex];
+	FString ResolvedText;
+	const TMap<FString, FString> BaseTokens = BuildTokenMap(RuntimeContext, TArray<FNPCDialogueToken>());
+	ResolvedText = ReplaceDialogueTokens(OutDialogue.Text.ToString(), BaseTokens);
+	for (const FNPCDialogueNode& Node : OutDialogue.Nodes)
+	{
+		AppendDialogueNodeText(Node, RuntimeContext, ResolvedText);
+	}
+	OutDialogue.Text = FText::FromString(ResolvedText);
 	return true;
 }
 

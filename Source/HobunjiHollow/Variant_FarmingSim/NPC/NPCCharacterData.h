@@ -104,6 +104,142 @@ struct FNPCGiftPreference
 };
 
 /**
+ * Dialogue condition for nested nodes
+ */
+USTRUCT(BlueprintType)
+struct FNPCDialogueCondition
+{
+	GENERATED_BODY()
+
+	/** Quest ID required for this node (empty = any) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FString QuestId;
+
+	/** Minimum quest progress required (0 = any) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	int32 MinQuestProgress = 0;
+
+	/** Maximum quest progress allowed (0 = no max) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	int32 MaxQuestProgress = 0;
+
+	/** Minimum hearts required to see this node */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	int32 MinFriendshipHearts = 0;
+
+	/** Maximum hearts allowed (0 = no max) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	int32 MaxFriendshipHearts = 0;
+
+	/** Tag group used for friendship checks (empty = any) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FString FriendshipTagGroup;
+
+	/** Minimum friendship for tag group (0 = any) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	int32 MinTagGroupFriendship = 0;
+
+	/** Maximum friendship for tag group (0 = no max) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	int32 MaxTagGroupFriendship = 0;
+
+	/** Player species required for this node (empty = any) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FString RequiredPlayerSpeciesId;
+
+	/** Held item required for this node (empty = any) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FString RequiredHeldItemId;
+
+	/** Flags that must be set */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TArray<FString> RequiredFlags;
+
+	/** Flags that must NOT be set */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TArray<FString> BlockingFlags;
+};
+
+/**
+ * Dialogue token replacement for nested nodes
+ */
+USTRUCT(BlueprintType)
+struct FNPCDialogueToken
+{
+	GENERATED_BODY()
+
+	/** Token name without braces */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FString Token;
+
+	/** Replacement text for this token */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FString Replacement;
+};
+
+/**
+ * Nested dialogue node supporting conditional text and child nodes
+ */
+USTRUCT(BlueprintType)
+struct FNPCDialogueNode
+{
+	GENERATED_BODY()
+
+	/** Text for this node */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FText Text;
+
+	/** Condition required for this node */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FNPCDialogueCondition Condition;
+
+	/** Token overrides for this node */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TArray<FNPCDialogueToken> Tokens;
+
+	/** Child nodes appended after this node */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TArray<FNPCDialogueNode> Children;
+};
+
+/**
+ * Dialogue runtime context for token resolution and conditions
+ */
+USTRUCT(BlueprintType)
+struct FNPCDialogueRuntimeContext
+{
+	GENERATED_BODY()
+
+	/** Current friendship hearts with the NPC */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	int32 CurrentHearts = 0;
+
+	/** Quest progress by ID */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TMap<FString, int32> QuestProgress;
+
+	/** Friendship values per tag group */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TMap<FString, int32> TagGroupFriendship;
+
+	/** Player species ID */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FString PlayerSpeciesId;
+
+	/** Held item ID */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FString HeldItemId;
+
+	/** Player name */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FString PlayerName;
+
+	/** Active event flags */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TArray<FString> ActiveFlags;
+};
+
+/**
  * A single dialogue line with conditions
  */
 USTRUCT(BlueprintType)
@@ -150,6 +286,10 @@ struct FNPCDialogueLine
 	/** Priority for selection (higher = more likely when multiple match) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
 	int32 Priority = 0;
+
+	/** Nested dialogue nodes appended after this line is selected */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TArray<FNPCDialogueNode> Nodes;
 };
 
 /**
@@ -546,9 +686,9 @@ public:
 
 	/** Get best matching dialogue line based on current conditions */
 	UFUNCTION(BlueprintPure, Category = "NPC Data")
-	bool GetBestDialogue(const FString& Category, int32 CurrentHearts, int32 CurrentSeason,
-		int32 CurrentDayOfWeek, const FString& CurrentWeather, const FString& CurrentLocation,
-		const TArray<FString>& ActiveFlags, FNPCDialogueLine& OutDialogue) const;
+	bool GetBestDialogue(const FString& Category, int32 CurrentSeason, int32 CurrentDayOfWeek,
+		const FString& CurrentWeather, const FString& CurrentLocation,
+		const FNPCDialogueRuntimeContext& RuntimeContext, FNPCDialogueLine& OutDialogue) const;
 
 	/** Get current schedule slot for the given time */
 	UFUNCTION(BlueprintPure, Category = "NPC Data")
