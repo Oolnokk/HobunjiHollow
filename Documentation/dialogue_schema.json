@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hobunjihollow.example.com/schemas/dialogue-schema.json",
+  "title": "Hobunji Hollow NPC Dialogue Schema",
+  "description": "Schema for NPC dialogue data with categories, lines, nested nodes, conditions, and tokens.",
+  "type": "object",
+  "required": ["schema_version", "dialogue"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Version of this dialogue schema."
+    },
+    "npc_id": {
+      "type": "string",
+      "description": "Optional NPC identifier for import/export convenience."
+    },
+    "dialogue": {
+      "type": "object",
+      "required": ["categories"],
+      "properties": {
+        "categories": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/category" }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "conditions": {
+      "type": "object",
+      "properties": {
+        "min_hearts": { "type": "integer", "default": 0 },
+        "max_hearts": { "type": "integer", "default": 0 },
+        "season": { "type": "integer", "default": -1 },
+        "day_of_week": { "type": "integer", "default": -1 },
+        "weather": { "type": "string", "default": "" },
+        "location": { "type": "string", "default": "" },
+        "required_flag": { "type": "string", "default": "" },
+        "blocking_flag": { "type": "string", "default": "" },
+        "priority": { "type": "integer", "default": 0 }
+      },
+      "additionalProperties": false
+    },
+    "node": {
+      "type": "object",
+      "required": ["text"],
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string" },
+        "tokens": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "conditions": { "$ref": "#/$defs/conditions" },
+        "nodes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/node" },
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "line": {
+      "type": "object",
+      "required": ["text"],
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string" },
+        "tokens": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "conditions": { "$ref": "#/$defs/conditions" },
+        "nodes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/node" },
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "category": {
+      "type": "object",
+      "required": ["category", "lines"],
+      "properties": {
+        "category": { "type": "string" },
+        "lines": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/line" }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "examples": [
+    {
+      "schema_version": "1.0.0",
+      "npc_id": "npc_example",
+      "dialogue": {
+        "categories": [
+          {
+            "category": "greeting",
+            "lines": [
+              {
+                "id": "greeting_01",
+                "text": "Hello there!",
+                "tokens": ["player_name"],
+                "conditions": {
+                  "min_hearts": 0,
+                  "max_hearts": 0,
+                  "season": -1,
+                  "day_of_week": -1,
+                  "weather": "",
+                  "location": "",
+                  "required_flag": "",
+                  "blocking_flag": "",
+                  "priority": 0
+                },
+                "nodes": [
+                  {
+                    "id": "greeting_followup",
+                    "text": "Nice to see you again!",
+                    "tokens": [],
+                    "conditions": {
+                      "min_hearts": 2,
+                      "max_hearts": 0,
+                      "season": -1,
+                      "day_of_week": -1,
+                      "weather": "",
+                      "location": "",
+                      "required_flag": "",
+                      "blocking_flag": "",
+                      "priority": 0
+                    },
+                    "nodes": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
