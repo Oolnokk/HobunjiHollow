@@ -459,6 +459,31 @@ bool UNPCDataComponent::GetDialogue(const FString& Category, int32 Season, int32
 		Weather, Location, TriggeredFlags, OutDialogue);
 }
 
+bool UNPCDataComponent::GetDialogueResolved(const FString& Category, int32 Season, int32 DayOfWeek,
+	const FString& Weather, const FString& Location, const FDialogueContext& Context,
+	FText& OutText, FNPCDialogueLine& OutDialogue)
+{
+	if (!LoadedData)
+	{
+		return false;
+	}
+
+	FDialogueContext ResolvedContext = Context;
+	if (ResolvedContext.ActiveFlags.Num() == 0)
+	{
+		ResolvedContext.ActiveFlags = TriggeredFlags;
+	}
+
+	if (!LoadedData->GetBestDialogueWithContext(Category, GetCurrentHearts(), Season, DayOfWeek,
+		Weather, Location, ResolvedContext, OutDialogue))
+	{
+		return false;
+	}
+
+	OutText = LoadedData->ResolveDialogueLineText(OutDialogue, ResolvedContext);
+	return true;
+}
+
 void UNPCDataComponent::RecordConversation()
 {
 	TalkedTodayCount++;

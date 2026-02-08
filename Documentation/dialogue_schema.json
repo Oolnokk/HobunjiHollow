@@ -1,0 +1,207 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hobunjihollow.local/schemas/dialogue.schema.json",
+  "title": "Hobunji Hollow Dialogue JSON",
+  "type": "object",
+  "required": ["formatVersion", "dialogueSets"],
+  "properties": {
+    "formatVersion": {
+      "type": "string",
+      "description": "Schema version for the dialogue JSON format."
+    },
+    "npcId": {
+      "type": "string",
+      "description": "Optional NPC ID that owns this dialogue."
+    },
+    "dialogueSets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/dialogueSet"
+      }
+    }
+  },
+  "$defs": {
+    "dialogueSet": {
+      "type": "object",
+      "required": ["category", "lines"],
+      "properties": {
+        "category": {
+          "type": "string"
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/dialogueLine"
+          }
+        }
+      }
+    },
+    "dialogueLine": {
+      "type": "object",
+      "required": ["text"],
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "minHearts": {
+          "type": "integer"
+        },
+        "maxHearts": {
+          "type": "integer"
+        },
+        "season": {
+          "type": "integer"
+        },
+        "dayOfWeek": {
+          "type": "integer"
+        },
+        "weather": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        },
+        "requiredFlag": {
+          "type": "string"
+        },
+        "blockingFlag": {
+          "type": "string"
+        },
+        "condition": {
+          "$ref": "#/$defs/condition"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/node"
+          }
+        },
+        "priority": {
+          "type": "integer"
+        }
+      }
+    },
+    "condition": {
+      "type": "object",
+      "properties": {
+        "questId": {
+          "type": "string"
+        },
+        "minQuestStage": {
+          "type": "integer"
+        },
+        "maxQuestStage": {
+          "type": "integer"
+        },
+        "npcId": {
+          "type": "string"
+        },
+        "minNpcHearts": {
+          "type": "integer"
+        },
+        "maxNpcHearts": {
+          "type": "integer"
+        },
+        "npcGroupTag": {
+          "type": "string"
+        },
+        "minGroupHearts": {
+          "type": "integer"
+        },
+        "maxGroupHearts": {
+          "type": "integer"
+        },
+        "playerSpeciesId": {
+          "type": "string"
+        },
+        "heldItemId": {
+          "type": "string"
+        },
+        "requiredFlags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "blockingFlags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "requiredCustomConditions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "blockingCustomConditions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "node": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "tokenType": {
+          "type": "string",
+          "enum": ["none", "playerName", "heldItemId", "playerSpeciesId"]
+        },
+        "condition": {
+          "$ref": "#/$defs/condition"
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/node"
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "formatVersion": "1.0",
+      "npcId": "npc_kai",
+      "dialogueSets": [
+        {
+          "category": "greeting",
+          "lines": [
+            {
+              "text": "Default hello.",
+              "minHearts": 0,
+              "priority": 0
+            },
+            {
+              "text": "",
+              "minHearts": 2,
+              "condition": {
+                "questId": "quest_welcome",
+                "minQuestStage": 1
+              },
+              "nodes": [
+                {
+                  "text": "Welcome back, ",
+                  "tokenType": "none"
+                },
+                {
+                  "tokenType": "playerName"
+                },
+                {
+                  "text": "!",
+                  "tokenType": "none"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
