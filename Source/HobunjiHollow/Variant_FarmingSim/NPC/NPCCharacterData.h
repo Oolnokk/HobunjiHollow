@@ -107,13 +107,21 @@ struct FNPCGiftPreference
  * A single dialogue line with conditions
  */
 USTRUCT(BlueprintType)
-struct FNPCDialogueLine
+struct FNPCDialogueNode
 {
 	GENERATED_BODY()
+
+	/** Unique identifier for this node */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FString NodeId;
 
 	/** The dialogue text */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
 	FText Text;
+
+	/** Token keys referenced by this dialogue node */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TArray<FString> Tokens;
 
 	/** Minimum hearts required to see this dialogue */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
@@ -150,6 +158,71 @@ struct FNPCDialogueLine
 	/** Priority for selection (higher = more likely when multiple match) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
 	int32 Priority = 0;
+
+	/** Nested dialogue nodes */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TArray<FNPCDialogueNode> Nodes;
+};
+
+/**
+ * A single dialogue line with conditions
+ */
+USTRUCT(BlueprintType)
+struct FNPCDialogueLine
+{
+	GENERATED_BODY()
+
+	/** Unique identifier for this line */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FString LineId;
+
+	/** The dialogue text */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FText Text;
+
+	/** Token keys referenced by this dialogue line */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TArray<FString> Tokens;
+
+	/** Minimum hearts required to see this dialogue */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	int32 MinHearts = 0;
+
+	/** Maximum hearts (0 = no max) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	int32 MaxHearts = 0;
+
+	/** Season requirement (-1 = any) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	int32 Season = -1;
+
+	/** Day of week requirement (-1 = any, 0-6 = Mon-Sun) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	int32 DayOfWeek = -1;
+
+	/** Weather requirement (empty = any) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FString Weather;
+
+	/** Location requirement (empty = any) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FString Location;
+
+	/** Event flag that must be set */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FString RequiredFlag;
+
+	/** Event flag that must NOT be set */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FString BlockingFlag;
+
+	/** Priority for selection (higher = more likely when multiple match) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	int32 Priority = 0;
+
+	/** Nested dialogue nodes */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TArray<FNPCDialogueNode> Nodes;
 };
 
 /**
@@ -549,6 +622,14 @@ public:
 	bool GetBestDialogue(const FString& Category, int32 CurrentHearts, int32 CurrentSeason,
 		int32 CurrentDayOfWeek, const FString& CurrentWeather, const FString& CurrentLocation,
 		const TArray<FString>& ActiveFlags, FNPCDialogueLine& OutDialogue) const;
+
+	/** Export dialogue data to a JSON string */
+	UFUNCTION(BlueprintCallable, Category = "NPC Data|Dialogue")
+	bool ExportDialogueToJsonString(FString& OutJson, FString& OutError) const;
+
+	/** Import dialogue data from a JSON string */
+	UFUNCTION(BlueprintCallable, Category = "NPC Data|Dialogue")
+	bool ImportDialogueFromJsonString(const FString& JsonString, FString& OutError);
 
 	/** Get current schedule slot for the given time */
 	UFUNCTION(BlueprintPure, Category = "NPC Data")

@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "NPCCharacterData.h"
+#include "NPCDialogueJsonHelper.h"
 
 EGiftPreference UNPCCharacterData::GetGiftPreference(const FString& ItemId) const
 {
@@ -197,6 +198,16 @@ bool UNPCCharacterData::GetScheduleSlotForTime(float CurrentTime, int32 CurrentS
 	}
 
 	return false;
+}
+
+bool UNPCCharacterData::ExportDialogueToJsonString(FString& OutJson, FString& OutError) const
+{
+	return FNPCDialogueJsonHelper::ExportDialogueToJsonString(this, OutJson, &OutError);
+}
+
+bool UNPCCharacterData::ImportDialogueFromJsonString(const FString& JsonString, FString& OutError)
+{
+	return FNPCDialogueJsonHelper::ImportDialogueFromJsonString(this, JsonString, &OutError);
 }
 
 FString UNPCCharacterData::GetSeasonName(int32 SeasonIndex)
