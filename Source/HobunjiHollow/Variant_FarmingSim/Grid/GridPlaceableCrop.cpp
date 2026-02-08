@@ -281,3 +281,46 @@ void AGridPlaceableCrop::SpawnHarvestDrops_Implementation()
 	// TODO: Actually spawn items or add to inventory
 	// This would integrate with the inventory system
 }
+
+void AGridPlaceableCrop::ShowAllStageMeshes()
+{
+	if (SeedMeshComponent && SeedMeshComponent->GetStaticMesh()) SeedMeshComponent->SetVisibility(true);
+	if (SproutMeshComponent && SproutMeshComponent->GetStaticMesh()) SproutMeshComponent->SetVisibility(true);
+	if (GrowingMeshComponent && GrowingMeshComponent->GetStaticMesh()) GrowingMeshComponent->SetVisibility(true);
+	if (MatureMeshComponent && MatureMeshComponent->GetStaticMesh()) MatureMeshComponent->SetVisibility(true);
+	if (HarvestableMeshComponent && HarvestableMeshComponent->GetStaticMesh()) HarvestableMeshComponent->SetVisibility(true);
+	if (DeadMeshComponent && DeadMeshComponent->GetStaticMesh()) DeadMeshComponent->SetVisibility(true);
+}
+
+#if WITH_EDITOR
+void AGridPlaceableCrop::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+
+	FName PropertyName = PropertyChangedEvent.GetPropertyName();
+	if (PropertyName == GET_MEMBER_NAME_CHECKED(AGridPlaceableCrop, EditorPreviewStage) ||
+		PropertyName == GET_MEMBER_NAME_CHECKED(AGridPlaceableCrop, bShowAllStagesInEditor))
+	{
+		UpdateEditorPreview();
+	}
+}
+
+void AGridPlaceableCrop::UpdateEditorPreview()
+{
+	if (bShowAllStagesInEditor)
+	{
+		// Show all meshes for comparison
+		ShowAllStageMeshes();
+	}
+	else
+	{
+		// Show only the preview stage
+		HideAllStageMeshes();
+		UStaticMeshComponent* PreviewMesh = GetMeshComponentForStage(EditorPreviewStage);
+		if (PreviewMesh && PreviewMesh->GetStaticMesh())
+		{
+			PreviewMesh->SetVisibility(true);
+		}
+	}
+}
+#endif

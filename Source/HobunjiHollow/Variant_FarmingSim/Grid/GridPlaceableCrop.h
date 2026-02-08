@@ -51,6 +51,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crop", SaveGame)
 	ECropGrowthStage GrowthStage = ECropGrowthStage::Seed;
 
+#if WITH_EDITORONLY_DATA
+	/** Which stage to preview in editor (for positioning meshes) */
+	UPROPERTY(EditAnywhere, Category = "Crop|Editor Preview")
+	ECropGrowthStage EditorPreviewStage = ECropGrowthStage::Seed;
+
+	/** Show all stage meshes at once (for comparing positions) */
+	UPROPERTY(EditAnywhere, Category = "Crop|Editor Preview")
+	bool bShowAllStagesInEditor = false;
+#endif
+
 	/** Days required to reach harvestable stage */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crop", meta = (ClampMin = "1"))
 	int32 DaysToMature = 4;
@@ -202,4 +212,12 @@ protected:
 
 	/** Hide all stage meshes */
 	void HideAllStageMeshes();
+
+	/** Show all stage meshes (for editor preview) */
+	void ShowAllStageMeshes();
+
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+	void UpdateEditorPreview();
+#endif
 };

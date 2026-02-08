@@ -247,3 +247,45 @@ void AGridPlaceableTree::SetGrowthStage(ETreeGrowthStage NewStage)
 	UpdateVisuals();
 	UpdateCollision();
 }
+
+void AGridPlaceableTree::ShowAllStageMeshes()
+{
+	if (SeedMeshComponent && SeedMeshComponent->GetStaticMesh()) SeedMeshComponent->SetVisibility(true);
+	if (SaplingMeshComponent && SaplingMeshComponent->GetStaticMesh()) SaplingMeshComponent->SetVisibility(true);
+	if (YoungMeshComponent && YoungMeshComponent->GetStaticMesh()) YoungMeshComponent->SetVisibility(true);
+	if (MatureMeshComponent && MatureMeshComponent->GetStaticMesh()) MatureMeshComponent->SetVisibility(true);
+	if (StumpMeshComponent && StumpMeshComponent->GetStaticMesh()) StumpMeshComponent->SetVisibility(true);
+}
+
+#if WITH_EDITOR
+void AGridPlaceableTree::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+
+	FName PropertyName = PropertyChangedEvent.GetPropertyName();
+	if (PropertyName == GET_MEMBER_NAME_CHECKED(AGridPlaceableTree, EditorPreviewStage) ||
+		PropertyName == GET_MEMBER_NAME_CHECKED(AGridPlaceableTree, bShowAllStagesInEditor))
+	{
+		UpdateEditorPreview();
+	}
+}
+
+void AGridPlaceableTree::UpdateEditorPreview()
+{
+	if (bShowAllStagesInEditor)
+	{
+		// Show all meshes for comparison
+		ShowAllStageMeshes();
+	}
+	else
+	{
+		// Show only the preview stage
+		HideAllStageMeshes();
+		UStaticMeshComponent* PreviewMesh = GetMeshComponentForStage(EditorPreviewStage);
+		if (PreviewMesh && PreviewMesh->GetStaticMesh())
+		{
+			PreviewMesh->SetVisibility(true);
+		}
+	}
+}
+#endif

@@ -60,6 +60,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tree", SaveGame)
 	ETreeGrowthStage GrowthStage = ETreeGrowthStage::Mature;
 
+#if WITH_EDITORONLY_DATA
+	/** Which stage to preview in editor (for positioning meshes) */
+	UPROPERTY(EditAnywhere, Category = "Tree|Editor Preview")
+	ETreeGrowthStage EditorPreviewStage = ETreeGrowthStage::Mature;
+
+	/** Show all stage meshes at once (for comparing positions) */
+	UPROPERTY(EditAnywhere, Category = "Tree|Editor Preview")
+	bool bShowAllStagesInEditor = false;
+#endif
+
 	/** Whether this tree regenerates after being chopped */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tree")
 	bool bRegenerates = true;
@@ -196,6 +206,14 @@ protected:
 	/** Hide all stage meshes */
 	void HideAllStageMeshes();
 
+	/** Show all stage meshes (for editor preview) */
+	void ShowAllStageMeshes();
+
 	/** Update collision based on growth stage */
 	void UpdateCollision();
+
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+	void UpdateEditorPreview();
+#endif
 };
