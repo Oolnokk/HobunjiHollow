@@ -3,6 +3,8 @@
 #include "GridPlaceableTree.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "GridFootprintComponent.h"
+#include "FarmGridManager.h"
 
 AGridPlaceableTree::AGridPlaceableTree()
 {
@@ -12,6 +14,13 @@ AGridPlaceableTree::AGridPlaceableTree()
 	RootSceneComponent = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	RootComponent = RootSceneComponent;
 
+	// Create footprint component for grid placement
+	FootprintComponent = CreateDefaultSubobject<UGridFootprintComponent>(TEXT("FootprintComponent"));
+	FootprintComponent->SetupAttachment(RootSceneComponent);
+	FootprintComponent->TileWidth = 1;
+	FootprintComponent->TileHeight = 1;
+	FootprintComponent->bBlocksMovement = true;
+
 	// Create capsule collision for smooth sliding
 	CollisionCapsule = CreateDefaultSubobject<UCapsuleComponent>(TEXT("CollisionCapsule"));
 	CollisionCapsule->SetupAttachment(RootComponent);
@@ -20,19 +29,32 @@ AGridPlaceableTree::AGridPlaceableTree()
 	CollisionCapsule->SetCollisionProfileName(TEXT("BlockAll"));
 	CollisionCapsule->SetRelativeLocation(FVector(0.0f, 0.0f, CollisionHalfHeight));
 
-	// Create mesh components (visuals only, no collision)
-	TrunkMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("TrunkMesh"));
-	TrunkMesh->SetupAttachment(RootComponent);
-	TrunkMesh->SetCollisionProfileName(TEXT("NoCollision"));
+	// Create mesh components for each growth stage
+	// Each can be positioned precisely in the viewport
+	SeedMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SeedMesh"));
+	SeedMeshComponent->SetupAttachment(RootSceneComponent);
+	SeedMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	SeedMeshComponent->SetVisibility(false);
 
-	LeavesMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("LeavesMesh"));
-	LeavesMesh->SetupAttachment(TrunkMesh);
-	LeavesMesh->SetCollisionProfileName(TEXT("NoCollision"));
+	SaplingMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SaplingMesh"));
+	SaplingMeshComponent->SetupAttachment(RootSceneComponent);
+	SaplingMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	SaplingMeshComponent->SetVisibility(false);
 
-	StumpMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("StumpMesh"));
-	StumpMesh->SetupAttachment(RootComponent);
-	StumpMesh->SetCollisionProfileName(TEXT("NoCollision"));
-	StumpMesh->SetVisibility(false);
+	YoungMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("YoungMesh"));
+	YoungMeshComponent->SetupAttachment(RootSceneComponent);
+	YoungMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	YoungMeshComponent->SetVisibility(false);
+
+	MatureMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MatureMesh"));
+	MatureMeshComponent->SetupAttachment(RootSceneComponent);
+	MatureMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	MatureMeshComponent->SetVisibility(false);
+
+	StumpMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("StumpMesh"));
+	StumpMeshComponent->SetupAttachment(RootSceneComponent);
+	StumpMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	StumpMeshComponent->SetVisibility(false);
 
 	// Set default seed IDs based on tree type (can be overridden in BP)
 	SeedDropId = FName("acorn");
@@ -42,6 +64,7 @@ void AGridPlaceableTree::BeginPlay()
 {
 	Super::BeginPlay();
 	UpdateVisuals();
+	UpdateCollision();
 }
 
 bool AGridPlaceableTree::CanBeChopped() const
@@ -101,45 +124,94 @@ void AGridPlaceableTree::OnDayAdvance()
 	}
 }
 
+void AGridPlaceableTree::HideAllStageMeshes()
+{
+	if (SeedMeshComponent) SeedMeshComponent->SetVisibility(false);
+	if (SaplingMeshComponent) SaplingMeshComponent->SetVisibility(false);
+	if (YoungMeshComponent) YoungMeshComponent->SetVisibility(false);
+	if (MatureMeshComponent) MatureMeshComponent->SetVisibility(false);
+	if (StumpMeshComponent) StumpMeshComponent->SetVisibility(false);
+}
+
+UStaticMeshComponent* AGridPlaceableTree::GetMeshComponentForStage(ETreeGrowthStage Stage) const
+{
+	switch (Stage)
+	{
+	case ETreeGrowthStage::Seed:
+		return SeedMeshComponent;
+	case ETreeGrowthStage::Sapling:
+		return SaplingMeshComponent;
+	case ETreeGrowthStage::Young:
+		return YoungMeshComponent;
+	case ETreeGrowthStage::Mature:
+		return MatureMeshComponent;
+	case ETreeGrowthStage::Stump:
+		return StumpMeshComponent;
+	default:
+		return nullptr;
+	}
+}
+
 void AGridPlaceableTree::UpdateVisuals()
 {
+	// Hide all meshes first
+	HideAllStageMeshes();
+
+	// Show only the current stage's mesh
+	UStaticMeshComponent* CurrentMesh = GetMeshComponentForStage(GrowthStage);
+	if (CurrentMesh && CurrentMesh->GetStaticMesh())
+	{
+		CurrentMesh->SetVisibility(true);
+	}
+}
+
+void AGridPlaceableTree::UpdateCollision()
+{
+	if (!CollisionCapsule)
+	{
+		return;
+	}
+
+	// Adjust collision based on growth stage
 	switch (GrowthStage)
 	{
-		case ETreeGrowthStage::Seed:
-			TrunkMesh->SetVisibility(false);
-			LeavesMesh->SetVisibility(false);
-			StumpMesh->SetVisibility(false);
-			break;
+	case ETreeGrowthStage::Seed:
+		CollisionCapsule->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		break;
+	case ETreeGrowthStage::Sapling:
+		CollisionCapsule->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		CollisionCapsule->SetCapsuleRadius(CollisionRadius * 0.3f);
+		CollisionCapsule->SetCapsuleHalfHeight(CollisionHalfHeight * 0.3f);
+		break;
+	case ETreeGrowthStage::Young:
+		CollisionCapsule->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		CollisionCapsule->SetCapsuleRadius(CollisionRadius * 0.7f);
+		CollisionCapsule->SetCapsuleHalfHeight(CollisionHalfHeight * 0.7f);
+		break;
+	case ETreeGrowthStage::Mature:
+		CollisionCapsule->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		CollisionCapsule->SetCapsuleRadius(CollisionRadius);
+		CollisionCapsule->SetCapsuleHalfHeight(CollisionHalfHeight);
+		break;
+	case ETreeGrowthStage::Stump:
+		CollisionCapsule->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		CollisionCapsule->SetCapsuleRadius(CollisionRadius * 0.8f);
+		CollisionCapsule->SetCapsuleHalfHeight(20.0f); // Short stump
+		break;
+	}
+}
 
-		case ETreeGrowthStage::Sapling:
-			TrunkMesh->SetVisibility(true);
-			TrunkMesh->SetWorldScale3D(FVector(0.3f));
-			LeavesMesh->SetVisibility(true);
-			LeavesMesh->SetWorldScale3D(FVector(0.3f));
-			StumpMesh->SetVisibility(false);
-			break;
+void AGridPlaceableTree::SetGridPosition(const FGridCoordinate& Position)
+{
+	GridPosition = Position;
 
-		case ETreeGrowthStage::Young:
-			TrunkMesh->SetVisibility(true);
-			TrunkMesh->SetWorldScale3D(FVector(0.7f));
-			LeavesMesh->SetVisibility(true);
-			LeavesMesh->SetWorldScale3D(FVector(0.7f));
-			StumpMesh->SetVisibility(false);
-			break;
-
-		case ETreeGrowthStage::Mature:
-			TrunkMesh->SetVisibility(true);
-			TrunkMesh->SetWorldScale3D(FVector(1.0f));
-			LeavesMesh->SetVisibility(true);
-			LeavesMesh->SetWorldScale3D(FVector(1.0f));
-			StumpMesh->SetVisibility(false);
-			break;
-
-		case ETreeGrowthStage::Stump:
-			TrunkMesh->SetVisibility(false);
-			LeavesMesh->SetVisibility(false);
-			StumpMesh->SetVisibility(true);
-			break;
+	// Register with grid manager
+	if (UWorld* World = GetWorld())
+	{
+		if (UFarmGridManager* GridManager = World->GetSubsystem<UFarmGridManager>())
+		{
+			FootprintComponent->RegisterWithGrid(GridManager, GridPosition);
+		}
 	}
 }
 
@@ -173,4 +245,5 @@ void AGridPlaceableTree::SetGrowthStage(ETreeGrowthStage NewStage)
 {
 	GrowthStage = NewStage;
 	UpdateVisuals();
+	UpdateCollision();
 }

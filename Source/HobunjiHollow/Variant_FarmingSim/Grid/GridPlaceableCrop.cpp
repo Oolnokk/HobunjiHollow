@@ -2,6 +2,8 @@
 
 #include "GridPlaceableCrop.h"
 #include "Components/StaticMeshComponent.h"
+#include "GridFootprintComponent.h"
+#include "FarmGridManager.h"
 
 AGridPlaceableCrop::AGridPlaceableCrop()
 {
@@ -11,10 +13,44 @@ AGridPlaceableCrop::AGridPlaceableCrop()
 	RootSceneComponent = CreateDefaultSubobject<USceneComponent>(TEXT("RootComponent"));
 	SetRootComponent(RootSceneComponent);
 
-	// Create mesh component
-	CropMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("CropMesh"));
-	CropMesh->SetupAttachment(RootSceneComponent);
-	CropMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	// Create footprint component for grid placement
+	FootprintComponent = CreateDefaultSubobject<UGridFootprintComponent>(TEXT("FootprintComponent"));
+	FootprintComponent->SetupAttachment(RootSceneComponent);
+	FootprintComponent->TileWidth = 1;
+	FootprintComponent->TileHeight = 1;
+	FootprintComponent->bBlocksMovement = false; // Crops don't block movement
+
+	// Create mesh components for each growth stage
+	// Each can be positioned in the viewport to sit correctly in the soil
+	SeedMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SeedMesh"));
+	SeedMeshComponent->SetupAttachment(RootSceneComponent);
+	SeedMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	SeedMeshComponent->SetVisibility(false);
+
+	SproutMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SproutMesh"));
+	SproutMeshComponent->SetupAttachment(RootSceneComponent);
+	SproutMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	SproutMeshComponent->SetVisibility(false);
+
+	GrowingMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("GrowingMesh"));
+	GrowingMeshComponent->SetupAttachment(RootSceneComponent);
+	GrowingMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	GrowingMeshComponent->SetVisibility(false);
+
+	MatureMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MatureMesh"));
+	MatureMeshComponent->SetupAttachment(RootSceneComponent);
+	MatureMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	MatureMeshComponent->SetVisibility(false);
+
+	HarvestableMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("HarvestableMesh"));
+	HarvestableMeshComponent->SetupAttachment(RootSceneComponent);
+	HarvestableMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	HarvestableMeshComponent->SetVisibility(false);
+
+	DeadMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("DeadMesh"));
+	DeadMeshComponent->SetupAttachment(RootSceneComponent);
+	DeadMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	DeadMeshComponent->SetVisibility(false);
 }
 
 void AGridPlaceableCrop::BeginPlay()
@@ -128,46 +164,65 @@ void AGridPlaceableCrop::OnDayAdvance(int32 CurrentSeason)
 	bWateredToday = false;
 }
 
-void AGridPlaceableCrop::UpdateVisuals()
+void AGridPlaceableCrop::HideAllStageMeshes()
 {
-	if (!CropMesh)
-	{
-		return;
-	}
+	if (SeedMeshComponent) SeedMeshComponent->SetVisibility(false);
+	if (SproutMeshComponent) SproutMeshComponent->SetVisibility(false);
+	if (GrowingMeshComponent) GrowingMeshComponent->SetVisibility(false);
+	if (MatureMeshComponent) MatureMeshComponent->SetVisibility(false);
+	if (HarvestableMeshComponent) HarvestableMeshComponent->SetVisibility(false);
+	if (DeadMeshComponent) DeadMeshComponent->SetVisibility(false);
+}
 
-	UStaticMesh* MeshToUse = nullptr;
-
-	switch (GrowthStage)
+UStaticMeshComponent* AGridPlaceableCrop::GetMeshComponentForStage(ECropGrowthStage Stage) const
+{
+	switch (Stage)
 	{
 	case ECropGrowthStage::Seed:
-		MeshToUse = SeedMesh;
-		break;
+		return SeedMeshComponent;
 	case ECropGrowthStage::Sprout:
-		MeshToUse = SproutMesh;
-		break;
+		return SproutMeshComponent;
 	case ECropGrowthStage::Growing:
-		MeshToUse = GrowingMesh;
-		break;
+		return GrowingMeshComponent;
 	case ECropGrowthStage::Mature:
-		MeshToUse = MatureMesh;
-		break;
+		return MatureMeshComponent;
 	case ECropGrowthStage::Harvestable:
-		MeshToUse = HarvestableMesh ? HarvestableMesh : MatureMesh;
-		break;
+		// Use harvestable mesh if available, otherwise fall back to mature
+		return HarvestableMeshComponent && HarvestableMeshComponent->GetStaticMesh()
+			? HarvestableMeshComponent
+			: MatureMeshComponent;
 	case ECropGrowthStage::Dead:
-		MeshToUse = DeadMesh;
-		break;
+		return DeadMeshComponent;
+	default:
+		return nullptr;
 	}
+}
 
-	if (MeshToUse)
+void AGridPlaceableCrop::UpdateVisuals()
+{
+	// Hide all meshes first
+	HideAllStageMeshes();
+
+	// Show only the current stage's mesh
+	UStaticMeshComponent* CurrentMesh = GetMeshComponentForStage(GrowthStage);
+	if (CurrentMesh && CurrentMesh->GetStaticMesh())
 	{
-		CropMesh->SetStaticMesh(MeshToUse);
+		CurrentMesh->SetVisibility(true);
 	}
 }
 
 void AGridPlaceableCrop::SetGridPosition(const FGridCoordinate& Position)
 {
 	GridPosition = Position;
+
+	// Register with grid manager
+	if (UWorld* World = GetWorld())
+	{
+		if (UFarmGridManager* GridManager = World->GetSubsystem<UFarmGridManager>())
+		{
+			FootprintComponent->RegisterWithGrid(GridManager, GridPosition);
+		}
+	}
 }
 
 void AGridPlaceableCrop::InitializeFromSaveData(FName InCropTypeId, int32 InGrowthStage, int32 InDaysGrown, bool InWateredToday, int32 InTotalDaysWatered)

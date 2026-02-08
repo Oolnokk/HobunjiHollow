@@ -8,6 +8,7 @@
 #include "GridPlaceableCrop.generated.h"
 
 class UStaticMeshComponent;
+class UGridFootprintComponent;
 
 /**
  * Growth stage of a crop
@@ -25,7 +26,8 @@ enum class ECropGrowthStage : uint8
 
 /**
  * A crop that can be planted, watered, grown, and harvested.
- * Supports persistence through the save system.
+ * Uses separate mesh components for each growth stage that are shown/hidden,
+ * allowing precise positioning in the viewport.
  */
 UCLASS(BlueprintType, Blueprintable)
 class HOBUNJIHOLLOW_API AGridPlaceableCrop : public AActor
@@ -104,28 +106,31 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	USceneComponent* RootSceneComponent;
 
+	/** Grid footprint for placement preview and scaling */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
-	UStaticMeshComponent* CropMesh;
+	UGridFootprintComponent* FootprintComponent;
 
-	// ---- Growth Stage Meshes ----
+	// ---- Growth Stage Mesh Components ----
+	// Each mesh component can be positioned precisely in the viewport.
+	// Only the current stage's mesh is visible at runtime.
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crop|Visuals")
-	UStaticMesh* SeedMesh;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Growth Stages")
+	UStaticMeshComponent* SeedMeshComponent;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crop|Visuals")
-	UStaticMesh* SproutMesh;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Growth Stages")
+	UStaticMeshComponent* SproutMeshComponent;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crop|Visuals")
-	UStaticMesh* GrowingMesh;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Growth Stages")
+	UStaticMeshComponent* GrowingMeshComponent;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crop|Visuals")
-	UStaticMesh* MatureMesh;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Growth Stages")
+	UStaticMeshComponent* MatureMeshComponent;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crop|Visuals")
-	UStaticMesh* HarvestableMesh;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Growth Stages")
+	UStaticMeshComponent* HarvestableMeshComponent;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crop|Visuals")
-	UStaticMesh* DeadMesh;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Growth Stages")
+	UStaticMeshComponent* DeadMeshComponent;
 
 	// ---- Interaction ----
 
@@ -149,7 +154,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Crop")
 	void OnDayAdvance(int32 CurrentSeason);
 
-	/** Update visual based on growth stage */
+	/** Update visual based on growth stage (shows/hides appropriate mesh) */
 	UFUNCTION(BlueprintCallable, Category = "Crop")
 	void UpdateVisuals();
 
@@ -191,4 +196,10 @@ protected:
 
 	/** Calculate quality based on watering consistency */
 	int32 CalculateHarvestQuality() const;
+
+	/** Helper to get mesh component for a given stage */
+	UStaticMeshComponent* GetMeshComponentForStage(ECropGrowthStage Stage) const;
+
+	/** Hide all stage meshes */
+	void HideAllStageMeshes();
 };
