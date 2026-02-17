@@ -16,6 +16,7 @@ class UInventoryComponent;
 class UGearInventoryComponent;
 class UStaticMeshComponent;
 class UClothingComponent;
+class UEyeComponent;
 class UInputAction;
 struct FInputActionValue;
 
@@ -113,6 +114,13 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Farming|Appearance")
 	UClothingComponent* ClothingComponent;
 
+	/**
+	 * Manages the eye skeletal mesh, automated blink state machine, and emotion
+	 * morph target blending. Attach socket is "EyeSocket" on the head bone.
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Farming|Appearance")
+	UEyeComponent* EyeComponent;
+
 	/** Get the current character save */
 	UFUNCTION(BlueprintCallable, Category = "Farming|Save")
 	UFarmingCharacterSaveGame* GetCharacterSave() const { return CharacterSave; }
@@ -165,17 +173,33 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Farming|Character")
 	void ApplyClothingDyes(FLinearColor DyeA, FLinearColor DyeB, FLinearColor DyeC);
 
+	/**
+	 * Load an eye mesh from UEyeStyleDatabase and apply it via EyeComponent.
+	 * Pass NAME_None to hide the eye mesh.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Farming|Character")
+	void ApplyEyeStyle(FName EyeStyleId);
+
+	/**
+	 * Apply the iris/pupil color to the eye mesh material (CharacterColor4).
+	 * Also updates CharacterColor4 on the body mesh materials so any body
+	 * material slots that read that parameter stay in sync.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Farming|Character")
+	void ApplyEyeColor(FLinearColor Color);
+
 	/** Server RPC: Set character species (called by owning client) */
 	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Farming|Character")
 	void ServerSetSpecies(const FName& SpeciesID, ECharacterGender Gender);
 
 	/**
-	 * Server RPC: Set full body appearance (species, gender, body colors, hair, beard).
+	 * Server RPC: Set full body appearance (species, gender, body colors, hair, beard, eyes).
 	 */
 	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Farming|Character")
 	void ServerSetAppearance(const FName& SpeciesID, ECharacterGender Gender,
 	                         FLinearColor ColorA, FLinearColor ColorB, FLinearColor ColorC,
-	                         FName HairStyleId, FName BeardStyleId);
+	                         FName HairStyleId, FName BeardStyleId,
+	                         FName EyeStyleId, FLinearColor EyeColor);
 
 	/**
 	 * Server RPC: Set clothing equipment and dye colors.
@@ -224,6 +248,14 @@ protected:
 	/** Replicated beard/facial hair style ID */
 	UPROPERTY(ReplicatedUsing = OnRep_AppearanceData, BlueprintReadOnly, Category = "Farming|Character")
 	FName ReplicatedBeardStyleId;
+
+	/** Replicated eye mesh style ID */
+	UPROPERTY(ReplicatedUsing = OnRep_AppearanceData, BlueprintReadOnly, Category = "Farming|Character")
+	FName ReplicatedEyeStyleId;
+
+	/** Replicated eye / iris color (CharacterColor4) */
+	UPROPERTY(ReplicatedUsing = OnRep_AppearanceData, BlueprintReadOnly, Category = "Farming|Character")
+	FLinearColor ReplicatedEyeColor = FLinearColor::Blue;
 
 	/** Replicated equipped clothing per slot */
 	UPROPERTY(ReplicatedUsing = OnRep_ClothingData, BlueprintReadOnly, Category = "Farming|Character")

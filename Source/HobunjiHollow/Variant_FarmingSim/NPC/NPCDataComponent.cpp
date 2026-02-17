@@ -7,7 +7,9 @@
 #include "Data/HairStyleDatabase.h"
 #include "Data/BeardStyleDatabase.h"
 #include "Data/ClothingDatabase.h"
+#include "Data/EyeStyleDatabase.h"
 #include "Clothing/ClothingComponent.h"
+#include "EyeComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/Character.h"
@@ -469,6 +471,22 @@ void UNPCDataComponent::ApplyAppearanceToMesh(USkeletalMeshComponent* MeshCompon
 				ClothingComp->EquippedItems = Appearance.Clothing;
 				ClothingComp->ApplyAllEquipped();
 				ClothingComp->ApplyDyes(Appearance.ClothingDyeA, Appearance.ClothingDyeB, Appearance.ClothingDyeC);
+			}
+		}
+	}
+
+	// ---- Eyes ----
+	// Hand off to UEyeComponent if one exists on the owner.
+	// CharacterColor4 drives the iris/pupil color.
+	{
+		AActor* Owner = GetOwner();
+		if (Owner)
+		{
+			UEyeComponent* EyeComp = Owner->FindComponentByClass<UEyeComponent>();
+			if (EyeComp)
+			{
+				EyeComp->ApplyEyeStyle(Appearance.EyeStyleId);
+				EyeComp->SetEyeColor(Appearance.CharacterColor4);
 			}
 		}
 	}

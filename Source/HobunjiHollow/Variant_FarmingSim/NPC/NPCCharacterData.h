@@ -7,6 +7,7 @@
 #include "Grid/GridTypes.h"
 #include "Data/SpeciesDatabase.h"
 #include "Data/ClothingDatabase.h"
+#include "Data/EyeStyleDatabase.h"
 #include "NPCCharacterData.generated.h"
 
 class USkeletalMesh;
@@ -319,6 +320,14 @@ struct FNPCAppearance
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Hair")
 	FName BeardStyleId;
+
+	/**
+	 * Eye mesh style ID - looked up in UEyeStyleDatabase at runtime.
+	 * The mesh is attached to EyeSocket on the head bone.
+	 * Color (iris/pupil) is driven by CharacterColor4.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Eyes")
+	FName EyeStyleId;
 
 	// ---- Clothing ----
 

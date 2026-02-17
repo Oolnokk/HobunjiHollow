@@ -107,6 +107,19 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Appearance")
 	FName BeardStyleId;
 
+	/**
+	 * Eye mesh style ID - references an entry in UEyeStyleDatabase.
+	 * Leave as None for no custom eye mesh.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Appearance")
+	FName EyeStyleId;
+
+	/**
+	 * Eye / iris color (CharacterColor4 on the eye mesh material).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Appearance")
+	FLinearColor EyeColor = FLinearColor::Blue;
+
 	// ---- Clothing ----
 
 	/** Clothing dye A - CharacterColor1 on all equipped clothing materials. */
