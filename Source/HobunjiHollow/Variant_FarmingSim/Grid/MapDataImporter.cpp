@@ -3,7 +3,10 @@
 #include "MapDataImporter.h"
 #include "FarmGridManager.h"
 #include "ObjectClassRegistry.h"
+#include "GridFootprintComponent.h"
 #include "Components/SceneComponent.h"
+#include "Components/LineBatchComponent.h"
+#include "Components/BoxComponent.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
@@ -20,6 +23,8 @@ AMapDataImporter::AMapDataImporter()
 	// Create root component so actor has a visible transform in editor
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 	RootComponent = SceneRoot;
+
+	GridLineBatch = nullptr;
 }
 
 void AMapDataImporter::BeginPlay()
@@ -38,6 +43,8 @@ void AMapDataImporter::BeginPlay()
 void AMapDataImporter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	ClearSpawnedObjects();
+	ClearBlockedCollision();
+	DestroyGridLineBatch();
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -66,7 +73,9 @@ void AMapDataImporter::PostEditChangeProperty(FPropertyChangedEvent& PropertyCha
 			 PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, bDrawGridLines) ||
 			 PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, DebugDrawHeightOffset) ||
 			 PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, DebugLineThickness) ||
-			 PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, DebugGridDrawRadius))
+			 PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, DebugGridDrawRadius) ||
+			 PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, bRaycastGridToTerrain) ||
+			 PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, bUsePersistentLines))
 	{
 		if (bDrawDebugGrid)
 		{
@@ -83,6 +92,14 @@ void AMapDataImporter::PostEditChangeProperty(FPropertyChangedEvent& PropertyCha
 		{
 			ClearDebugDraw();
 		}
+	}
+	// Handle collision generation settings
+	else if (PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, bGenerateBlockedCollision) ||
+			 PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, BlockedCollisionHeight) ||
+			 PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, CollisionDepthBelow) ||
+			 PropertyName == GET_MEMBER_NAME_CHECKED(AMapDataImporter, BlockedCollisionProfile))
+	{
+		RebuildBlockedCollision();
 	}
 }
 
@@ -674,7 +691,17 @@ AActor* AMapDataImporter::SpawnObject(const FMapObjectData& ObjectData)
 		// Register with grid manager
 		if (UFarmGridManager* GridManager = GetGridManager())
 		{
-			GridManager->PlaceObject(SpawnedActor, ObjectData.GetGridCoordinate(), ObjectData.Width, ObjectData.Height);
+			// Check if the actor has a GridFootprintComponent - if so, use it for registration
+			if (UGridFootprintComponent* Footprint = SpawnedActor->FindComponentByClass<UGridFootprintComponent>())
+			{
+				// Use the footprint component's dimensions and register through it
+				Footprint->RegisterWithGrid(GridManager, ObjectData.GetGridCoordinate());
+			}
+			else
+			{
+				// Fallback to JSON-specified dimensions
+				GridManager->PlaceObject(SpawnedActor, ObjectData.GetGridCoordinate(), ObjectData.Width, ObjectData.Height);
+			}
 		}
 	}
 
@@ -728,7 +755,17 @@ AActor* AMapDataImporter::SpawnSpawner(const FMapSpawnerData& SpawnerData)
 	{
 		if (UFarmGridManager* GridManager = GetGridManager())
 		{
-			GridManager->PlaceObject(SpawnedActor, SpawnerData.GetGridCoordinate());
+			// Check if the actor has a GridFootprintComponent - if so, use it for registration
+			if (UGridFootprintComponent* Footprint = SpawnedActor->FindComponentByClass<UGridFootprintComponent>())
+			{
+				// Use the footprint component's dimensions and register through it
+				Footprint->RegisterWithGrid(GridManager, SpawnerData.GetGridCoordinate());
+			}
+			else
+			{
+				// Fallback to 1x1 for spawners without footprint
+				GridManager->PlaceObject(SpawnedActor, SpawnerData.GetGridCoordinate());
+			}
 		}
 	}
 
@@ -956,6 +993,14 @@ void AMapDataImporter::DrawAllGridData()
 		}
 	}
 
+	// Use persistent line batch if enabled (better for editor)
+	if (bUsePersistentLines)
+	{
+		RebuildPersistentGridLines();
+		// Still draw zones, roads, paths, connections with debug draw for now
+		// (they could be moved to persistent lines too if needed)
+	}
+
 	UWorld* World = GetWorld();
 	if (!World)
 	{
@@ -967,14 +1012,17 @@ void AMapDataImporter::DrawAllGridData()
 
 	float Duration = DebugDrawDuration;
 
-	// Draw in order from bottom to top layer
-	if (bDrawGridLines)
+	// Draw grid lines and terrain with debug draw if not using persistent lines
+	if (!bUsePersistentLines)
 	{
-		DrawDebugGridLines(Duration);
-	}
-	if (bDrawTerrain)
-	{
-		DrawDebugTerrain(Duration);
+		if (bDrawGridLines)
+		{
+			DrawDebugGridLines(Duration);
+		}
+		if (bDrawTerrain)
+		{
+			DrawDebugTerrain(Duration);
+		}
 	}
 	if (bDrawZones)
 	{
@@ -1002,6 +1050,13 @@ void AMapDataImporter::ClearDebugDraw()
 	if (World)
 	{
 		FlushPersistentDebugLines(World);
+	}
+
+	// Also clear persistent line batch
+	if (GridLineBatch)
+	{
+		GridLineBatch->Flush();
+		GridLineBatch->SetVisibility(false);
 	}
 }
 
@@ -1476,4 +1531,277 @@ FColor AMapDataImporter::GetZoneColor(const FString& ZoneType)
 	if (ZoneType == TEXT("restricted")) return FColor::Red;
 	if (ZoneType == TEXT("trigger")) return FColor::Magenta;
 	return FColor::White;
+}
+
+// ---- Persistent Grid Line Visualization ----
+
+void AMapDataImporter::CreateGridLineBatch()
+{
+	if (GridLineBatch)
+	{
+		return;
+	}
+
+	GridLineBatch = NewObject<ULineBatchComponent>(this, NAME_None, RF_Transient);
+	if (GridLineBatch)
+	{
+		GridLineBatch->SetupAttachment(SceneRoot);
+		GridLineBatch->SetVisibility(bDrawDebugGrid);
+		GridLineBatch->SetHiddenInGame(true);
+		GridLineBatch->RegisterComponent();
+	}
+}
+
+void AMapDataImporter::DestroyGridLineBatch()
+{
+	if (GridLineBatch)
+	{
+		GridLineBatch->DestroyComponent();
+		GridLineBatch = nullptr;
+	}
+}
+
+void AMapDataImporter::RebuildPersistentGridLines()
+{
+	if (!GridLineBatch)
+	{
+		CreateGridLineBatch();
+	}
+
+	if (!GridLineBatch || !bHasValidData)
+	{
+		return;
+	}
+
+	GridLineBatch->Flush();
+
+	if (!bDrawDebugGrid)
+	{
+		GridLineBatch->SetVisibility(false);
+		return;
+	}
+
+	GridLineBatch->SetVisibility(true);
+
+	FVector ActorLocation = GetActorLocation();
+	float GridScale = GetActorScale3D().X;
+	float Yaw = GetActorRotation().Yaw;
+	float CellSize = ParsedMapData.Grid.CellSize * GridScale;
+	float LineLifetime = -1.0f;
+
+	// Determine draw range
+	int32 StartX = 0;
+	int32 StartY = 0;
+	int32 EndX = ParsedMapData.Grid.Width;
+	int32 EndY = ParsedMapData.Grid.Height;
+
+	if (DebugGridDrawRadius > 0)
+	{
+		int32 CenterX = ParsedMapData.Grid.Width / 2;
+		int32 CenterY = ParsedMapData.Grid.Height / 2;
+		StartX = FMath::Max(0, CenterX - DebugGridDrawRadius);
+		StartY = FMath::Max(0, CenterY - DebugGridDrawRadius);
+		EndX = FMath::Min(ParsedMapData.Grid.Width, CenterX + DebugGridDrawRadius);
+		EndY = FMath::Min(ParsedMapData.Grid.Height, CenterY + DebugGridDrawRadius);
+	}
+
+	FLinearColor GridColor(0.3f, 0.3f, 0.3f, 0.5f);
+
+	// Helper to get position with optional terrain raycast
+	auto GetGridPoint = [&](int32 X, int32 Y) -> FVector
+	{
+		FVector2D LocalPos((X + 0.5f) * CellSize + ParsedMapData.Grid.OriginOffset.X * GridScale,
+						   (Y + 0.5f) * CellSize + ParsedMapData.Grid.OriginOffset.Y * GridScale);
+
+		if (!FMath::IsNearlyZero(Yaw))
+		{
+			float RadAngle = FMath::DegreesToRadians(Yaw);
+			float CosAngle = FMath::Cos(RadAngle);
+			float SinAngle = FMath::Sin(RadAngle);
+			float RotatedX = LocalPos.X * CosAngle - LocalPos.Y * SinAngle;
+			float RotatedY = LocalPos.X * SinAngle + LocalPos.Y * CosAngle;
+			LocalPos = FVector2D(RotatedX, RotatedY);
+		}
+
+		FVector WorldPos(LocalPos.X + ActorLocation.X, LocalPos.Y + ActorLocation.Y, ActorLocation.Z);
+
+		if (bRaycastGridToTerrain)
+		{
+			WorldPos.Z = SampleHeightAtWorld(WorldPos.X, WorldPos.Y) + DebugDrawHeightOffset;
+		}
+		else
+		{
+			WorldPos.Z = ActorLocation.Z + DebugDrawHeightOffset;
+		}
+
+		return WorldPos;
+	};
+
+	// Draw grid lines if enabled
+	if (bDrawGridLines)
+	{
+		float HalfCell = CellSize * 0.5f;
+
+		// Draw vertical lines
+		for (int32 X = StartX; X <= EndX; ++X)
+		{
+			for (int32 Y = StartY; Y < EndY; ++Y)
+			{
+				FVector Start = GetGridPoint(X, Y) - FVector(HalfCell, HalfCell, 0);
+				FVector End = GetGridPoint(X, Y + 1) - FVector(HalfCell, HalfCell, 0);
+				GridLineBatch->DrawLine(Start, End, GridColor, 0, DebugLineThickness * 0.5f, LineLifetime);
+			}
+		}
+
+		// Draw horizontal lines
+		for (int32 Y = StartY; Y <= EndY; ++Y)
+		{
+			for (int32 X = StartX; X < EndX; ++X)
+			{
+				FVector Start = GetGridPoint(X, Y) - FVector(HalfCell, HalfCell, 0);
+				FVector End = GetGridPoint(X + 1, Y) - FVector(HalfCell, HalfCell, 0);
+				GridLineBatch->DrawLine(Start, End, GridColor, 0, DebugLineThickness * 0.5f, LineLifetime);
+			}
+		}
+	}
+
+	// Draw terrain tiles
+	if (bDrawTerrain)
+	{
+		for (const FMapTerrainTile& Tile : ParsedMapData.Terrain)
+		{
+			if (Tile.X < StartX || Tile.X >= EndX || Tile.Y < StartY || Tile.Y >= EndY)
+			{
+				continue;
+			}
+
+			FVector CellCenter = GetGridPoint(Tile.X, Tile.Y);
+			float HalfSize = CellSize * 0.45f;
+
+			FVector Corner1 = CellCenter + FVector(-HalfSize, -HalfSize, 0);
+			FVector Corner2 = CellCenter + FVector(HalfSize, -HalfSize, 0);
+			FVector Corner3 = CellCenter + FVector(HalfSize, HalfSize, 0);
+			FVector Corner4 = CellCenter + FVector(-HalfSize, HalfSize, 0);
+
+			// Raycast each corner for proper terrain following
+			if (bRaycastGridToTerrain)
+			{
+				Corner1.Z = SampleHeightAtWorld(Corner1.X, Corner1.Y) + DebugDrawHeightOffset;
+				Corner2.Z = SampleHeightAtWorld(Corner2.X, Corner2.Y) + DebugDrawHeightOffset;
+				Corner3.Z = SampleHeightAtWorld(Corner3.X, Corner3.Y) + DebugDrawHeightOffset;
+				Corner4.Z = SampleHeightAtWorld(Corner4.X, Corner4.Y) + DebugDrawHeightOffset;
+			}
+
+			FLinearColor TileColor(GetTerrainColor(Tile.Type));
+
+			GridLineBatch->DrawLine(Corner1, Corner2, TileColor, 0, DebugLineThickness, LineLifetime);
+			GridLineBatch->DrawLine(Corner2, Corner3, TileColor, 0, DebugLineThickness, LineLifetime);
+			GridLineBatch->DrawLine(Corner3, Corner4, TileColor, 0, DebugLineThickness, LineLifetime);
+			GridLineBatch->DrawLine(Corner4, Corner1, TileColor, 0, DebugLineThickness, LineLifetime);
+		}
+	}
+
+	GridLineBatch->MarkRenderStateDirty();
+}
+
+// ---- Collision Generation ----
+
+void AMapDataImporter::GenerateBlockedCollision()
+{
+	if (!bHasValidData)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("MapDataImporter: No valid map data to generate collision from"));
+		return;
+	}
+
+	FVector ActorLocation = GetActorLocation();
+	float GridScale = GetActorScale3D().X;
+	float Yaw = GetActorRotation().Yaw;
+	float CellSize = ParsedMapData.Grid.CellSize * GridScale;
+
+	// Helper to transform grid position to world
+	auto GridToWorld = [&](int32 X, int32 Y) -> FVector
+	{
+		FVector2D LocalPos((X + 0.5f) * CellSize + ParsedMapData.Grid.OriginOffset.X * GridScale,
+						   (Y + 0.5f) * CellSize + ParsedMapData.Grid.OriginOffset.Y * GridScale);
+
+		if (!FMath::IsNearlyZero(Yaw))
+		{
+			float RadAngle = FMath::DegreesToRadians(Yaw);
+			float CosAngle = FMath::Cos(RadAngle);
+			float SinAngle = FMath::Sin(RadAngle);
+			float RotatedX = LocalPos.X * CosAngle - LocalPos.Y * SinAngle;
+			float RotatedY = LocalPos.X * SinAngle + LocalPos.Y * CosAngle;
+			LocalPos = FVector2D(RotatedX, RotatedY);
+		}
+
+		return FVector(LocalPos.X + ActorLocation.X, LocalPos.Y + ActorLocation.Y, ActorLocation.Z);
+	};
+
+	int32 BlockedCount = 0;
+
+	// Create collision boxes for blocked tiles
+	for (const FMapTerrainTile& Tile : ParsedMapData.Terrain)
+	{
+		if (Tile.Type != TEXT("blocked"))
+		{
+			continue;
+		}
+
+		FVector WorldPos = GridToWorld(Tile.X, Tile.Y);
+
+		// Sample terrain height at this position
+		float TerrainZ = SampleHeightAtWorld(WorldPos.X, WorldPos.Y);
+
+		// Create box component
+		UBoxComponent* BoxComp = NewObject<UBoxComponent>(this);
+		if (BoxComp)
+		{
+			BoxComp->SetupAttachment(SceneRoot);
+
+			// Set box size (half extents)
+			float HalfCell = CellSize * 0.5f;
+			BoxComp->SetBoxExtent(FVector(HalfCell, HalfCell, BlockedCollisionHeight * 0.5f));
+
+			// Position at terrain height, centered on collision volume
+			FVector BoxLocation = WorldPos;
+			BoxLocation.Z = TerrainZ - CollisionDepthBelow + (BlockedCollisionHeight * 0.5f);
+			BoxComp->SetWorldLocation(BoxLocation);
+
+			// Apply rotation to match grid
+			BoxComp->SetWorldRotation(FRotator(0, Yaw, 0));
+
+			// Configure collision
+			BoxComp->SetCollisionProfileName(BlockedCollisionProfile);
+			BoxComp->SetVisibility(false);
+			BoxComp->SetHiddenInGame(true);
+
+			BoxComp->RegisterComponent();
+			BlockedCollisionBoxes.Add(BoxComp);
+			BlockedCount++;
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("MapDataImporter: Generated %d blocked tile collision boxes"), BlockedCount);
+}
+
+void AMapDataImporter::ClearBlockedCollision()
+{
+	for (UBoxComponent* Box : BlockedCollisionBoxes)
+	{
+		if (Box)
+		{
+			Box->DestroyComponent();
+		}
+	}
+	BlockedCollisionBoxes.Empty();
+}
+
+void AMapDataImporter::RebuildBlockedCollision()
+{
+	ClearBlockedCollision();
+	if (bGenerateBlockedCollision)
+	{
+		GenerateBlockedCollision();
+	}
 }

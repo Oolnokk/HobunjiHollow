@@ -90,6 +90,32 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Debug", meta = (EditCondition = "bDrawDebugGrid", ClampMin = "0.5"))
 	float DebugLineThickness = 2.0f;
 
+	/** Whether grid lines should follow terrain height via raycast */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Debug", meta = (EditCondition = "bDrawDebugGrid"))
+	bool bRaycastGridToTerrain = true;
+
+	/** Use persistent line component instead of debug draw (better for editor) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Debug", meta = (EditCondition = "bDrawDebugGrid"))
+	bool bUsePersistentLines = true;
+
+	// ---- Collision Generation ----
+
+	/** Whether to generate invisible collision walls for blocked tiles */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Collision")
+	bool bGenerateBlockedCollision = false;
+
+	/** Height of generated collision walls */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Collision", meta = (EditCondition = "bGenerateBlockedCollision", ClampMin = "1.0"))
+	float BlockedCollisionHeight = 200.0f;
+
+	/** How far below terrain surface to extend collision */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Collision", meta = (EditCondition = "bGenerateBlockedCollision"))
+	float CollisionDepthBelow = 50.0f;
+
+	/** Collision profile for blocked tiles */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Data|Collision", meta = (EditCondition = "bGenerateBlockedCollision"))
+	FName BlockedCollisionProfile = TEXT("BlockAll");
+
 	// ---- Import Functions ----
 
 	/** Import and parse the JSON file */
@@ -167,6 +193,20 @@ public:
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Map Data|Debug")
 	void ReimportAndRedraw();
 
+	// ---- Collision Generation ----
+
+	/** Generate collision for all blocked tiles */
+	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Map Data|Collision")
+	void GenerateBlockedCollision();
+
+	/** Clear all generated collision */
+	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Map Data|Collision")
+	void ClearBlockedCollision();
+
+	/** Rebuild collision (clear and regenerate) */
+	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Map Data|Collision")
+	void RebuildBlockedCollision();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -188,6 +228,21 @@ protected:
 
 	UPROPERTY()
 	bool bHasValidData = false;
+
+	/** Persistent line component for editor grid visualization */
+	UPROPERTY()
+	class ULineBatchComponent* GridLineBatch;
+
+	/** Generated collision box components for blocked tiles */
+	UPROPERTY()
+	TArray<class UBoxComponent*> BlockedCollisionBoxes;
+
+	/** Create/destroy the persistent line component */
+	void CreateGridLineBatch();
+	void DestroyGridLineBatch();
+
+	/** Rebuild persistent line visualization */
+	void RebuildPersistentGridLines();
 
 	/** Parse JSON object into map data */
 	bool ParseJsonObject(const TSharedPtr<FJsonObject>& JsonObject);

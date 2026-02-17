@@ -50,6 +50,22 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputAction* OpenInventoryAction;
 
+	/** Quick select button (hold to open, release to close/cancel) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* QuickSelectAction;
+
+	/** Quick select scroll (stick/dpad/keys for scrolling through items) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* QuickSelectScrollAction;
+
+	/** Confirm/select button (A/Space to confirm selection) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* ConfirmAction;
+
+	/** Cancel/stow button (B/X to cancel or stow held item) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* CancelAction;
+
 	/** Interaction range */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction")
 	float InteractionRange = 200.0f;
@@ -115,6 +131,21 @@ protected:
 
 	/** Handle inventory input */
 	void OnOpenInventory();
+
+	/** Handle quick select started (button pressed) */
+	void OnQuickSelectStarted();
+
+	/** Handle quick select completed (button released) */
+	void OnQuickSelectCompleted();
+
+	/** Handle quick select scroll input */
+	void OnQuickSelectScroll(const FInputActionValue& Value);
+
+	/** Handle confirm input (select item, use item) */
+	void OnConfirm();
+
+	/** Handle cancel input (close menu, stow item) */
+	void OnCancel();
 
 	/** Update which object is currently interactable */
 	void UpdateInteractableFocus();
