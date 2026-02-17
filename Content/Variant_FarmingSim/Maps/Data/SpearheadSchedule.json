@@ -16,15 +16,15 @@
   "defaultTerrain": "grass",
   "layers": {
     "terrain": [
-      { "x": 20, "y": 20, "type": "tillable", "properties": { "tilled": "true" } },
-      { "x": 21, "y": 20, "type": "tillable", "properties": { "tilled": "true" } },
-      { "x": 22, "y": 20, "type": "tillable", "properties": { "tilled": "true" } },
-      { "x": 20, "y": 21, "type": "tillable", "properties": { "tilled": "true" } },
-      { "x": 21, "y": 21, "type": "tillable", "properties": { "tilled": "true" } },
-      { "x": 22, "y": 21, "type": "tillable", "properties": { "tilled": "true" } },
-      { "x": 20, "y": 22, "type": "tillable", "properties": { "tilled": "true" } },
-      { "x": 21, "y": 22, "type": "tillable", "properties": { "tilled": "true" } },
-      { "x": 22, "y": 22, "type": "tillable", "properties": { "tilled": "true" } }
+      { "x": 20, "y": 20, "type": "tillable" },
+      { "x": 21, "y": 20, "type": "tillable" },
+      { "x": 22, "y": 20, "type": "tillable" },
+      { "x": 20, "y": 21, "type": "tillable" },
+      { "x": 21, "y": 21, "type": "tillable" },
+      { "x": 22, "y": 21, "type": "tillable" },
+      { "x": 20, "y": 22, "type": "tillable" },
+      { "x": 21, "y": 22, "type": "tillable" },
+      { "x": 22, "y": 22, "type": "tillable" }
     ],
     "objects": [
       {
@@ -38,7 +38,16 @@
           "ownerId": "Spearhead",
           "description": "Spearhead's house"
         }
-      }
+      },
+      { "id": "farm_soil_0", "type": "object", "objectClass": "tilled_soil", "x": 20, "y": 20, "rotation": 0 },
+      { "id": "farm_soil_1", "type": "object", "objectClass": "tilled_soil", "x": 21, "y": 20, "rotation": 0 },
+      { "id": "farm_soil_2", "type": "object", "objectClass": "tilled_soil", "x": 22, "y": 20, "rotation": 0 },
+      { "id": "farm_soil_3", "type": "object", "objectClass": "tilled_soil", "x": 20, "y": 21, "rotation": 0 },
+      { "id": "farm_soil_4", "type": "object", "objectClass": "tilled_soil", "x": 21, "y": 21, "rotation": 0 },
+      { "id": "farm_soil_5", "type": "object", "objectClass": "tilled_soil", "x": 22, "y": 21, "rotation": 0 },
+      { "id": "farm_soil_6", "type": "object", "objectClass": "tilled_soil", "x": 20, "y": 22, "rotation": 0 },
+      { "id": "farm_soil_7", "type": "object", "objectClass": "tilled_soil", "x": 21, "y": 22, "rotation": 0 },
+      { "id": "farm_soil_8", "type": "object", "objectClass": "tilled_soil", "x": 22, "y": 22, "rotation": 0 }
     ],
     "zones": [
       {

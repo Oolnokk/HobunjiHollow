@@ -35,6 +35,28 @@ AGridPlaceableTilledSoil::AGridPlaceableTilledSoil()
 void AGridPlaceableTilledSoil::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// The map spawner calls FootprintComponent->RegisterWithGrid() before BeginPlay,
+	// so we can read the registered coord to mark the cell as tilled.
+	if (UWorld* World = GetWorld())
+	{
+		if (UFarmGridManager* GridManager = World->GetSubsystem<UFarmGridManager>())
+		{
+			if (FootprintComponent->IsRegisteredWithGrid())
+			{
+				GridPosition = FootprintComponent->GetRegisteredAnchorCoord();
+			}
+			else
+			{
+				// Fallback: derive grid position from world location (e.g., placed by hand)
+				GridPosition = GridManager->WorldToGrid(GetActorLocation());
+				FootprintComponent->RegisterWithGrid(GridManager, GridPosition);
+			}
+
+			GridManager->SetTileTilled(GridPosition, true);
+		}
+	}
+
 	UpdateVisuals();
 }
 
