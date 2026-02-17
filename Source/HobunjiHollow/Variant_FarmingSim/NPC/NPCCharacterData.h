@@ -305,6 +305,15 @@ struct FNPCAppearance
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance")
 	TSoftObjectPtr<USkeletalMesh> OverrideMesh;
 
+	/**
+	 * Hair/mane/crest/fin style ID - looked up in UHairStyleDatabase at runtime.
+	 * Leave as None to show no hair mesh (bald, or species without head adornments).
+	 * The hair mesh receives whichever body color is nominated by the species
+	 * HairColorSource field in the Species DataTable.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Hair")
+	FName HairStyleId;
+
 	/** Outfit/clothing ID */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance")
 	FString OutfitId;

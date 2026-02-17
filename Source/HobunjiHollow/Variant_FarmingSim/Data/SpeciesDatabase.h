@@ -18,6 +18,19 @@ enum class ECharacterGender : uint8
 };
 
 /**
+ * Which body color channel the hair/mane/crest mesh inherits for this species.
+ * Set per species in the Species DataTable so that, e.g., a wolf's mane matches
+ * its primary fur color while a bird's crest matches its accent color.
+ */
+UENUM(BlueprintType)
+enum class EHairColorSource : uint8
+{
+	ColorA UMETA(DisplayName = "Body Color A (CharacterColor1 - primary)"),
+	ColorB UMETA(DisplayName = "Body Color B (CharacterColor2 - secondary)"),
+	ColorC UMETA(DisplayName = "Body Color C (CharacterColor3 - accents)"),
+};
+
+/**
  * Row structure for the Species Data Table
  * Each row represents one playable species with two skeletal mesh rigs (one per gender)
  */
@@ -53,6 +66,14 @@ struct FSpeciesData : public FTableRowBase
 	/** Whether this species is currently available for selection */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Species")
 	bool bIsAvailable = true;
+
+	/**
+	 * Which body color channel the hair/mane/crest/fin mesh inherits for this species.
+	 * Applied by ApplyBodyColors() on the player character and by NPCDataComponent
+	 * when a hair mesh component tagged "HairMesh" is found on the NPC actor.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Species|Hair")
+	EHairColorSource HairColorSource = EHairColorSource::ColorA;
 
 	/** Get the appropriate skeletal mesh for the given gender */
 	USkeletalMesh* GetSkeletalMeshForGender(ECharacterGender Gender) const

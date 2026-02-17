@@ -4,6 +4,7 @@
 #include "NPCDataRegistry.h"
 #include "NPCScheduleComponent.h"
 #include "Data/SpeciesDatabase.h"
+#include "Data/HairStyleDatabase.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
 #include "Net/UnrealNetwork.h"
@@ -296,6 +297,85 @@ void UNPCDataComponent::ApplyAppearanceToMesh(USkeletalMeshComponent* MeshCompon
 				DynMaterial->SetVectorParameterValue(TEXT("CharacterColor3"), Appearance.CharacterColor3);
 				DynMaterial->SetVectorParameterValue(TEXT("CharacterColor4"), Appearance.CharacterColor4);
 				DynMaterial->SetVectorParameterValue(TEXT("CharacterColor5"), Appearance.CharacterColor5);
+			}
+		}
+	}
+
+	// Apply hair mesh if the appearance data specifies one and the owner has a
+	// skeletal mesh component tagged "HairMesh". Add that tag in the NPC blueprint
+	// on the secondary skeletal mesh component you create for the hair slot.
+	if (!Appearance.HairStyleId.IsNone())
+	{
+		UHairStyleDatabase* HairDB = UHairStyleDatabase::Get();
+		if (HairDB)
+		{
+			FHairStyleData HairData;
+			if (HairDB->GetHairStyleData(Appearance.HairStyleId, HairData))
+			{
+				// Find a hair mesh component on the owner by tag
+				USkeletalMeshComponent* HairComp = nullptr;
+				TArray<USkeletalMeshComponent*> MeshComponents;
+				AActor* Owner = GetOwner();
+				if (Owner)
+				{
+					Owner->GetComponents<USkeletalMeshComponent>(MeshComponents);
+					for (USkeletalMeshComponent* Comp : MeshComponents)
+					{
+						if (Comp != MeshComponent && Comp->ComponentHasTag(FName("HairMesh")))
+						{
+							HairComp = Comp;
+							break;
+						}
+					}
+				}
+
+				if (HairComp)
+				{
+					USkeletalMesh* HairMesh = HairData.HairMesh.LoadSynchronous();
+					if (HairMesh)
+					{
+						HairComp->SetSkeletalMesh(HairMesh);
+						HairComp->AttachToComponent(MeshComponent,
+							FAttachmentTransformRules::SnapToTargetNotIncludingScale,
+							HairDB->HairAttachSocket);
+						HairComp->SetVisibility(true);
+						HairComp->SetHiddenInGame(false);
+
+						// Resolve which body color tints the hair for this species
+						FLinearColor HairColor = Appearance.CharacterColor1;
+						if (!Appearance.SpeciesId.IsEmpty())
+						{
+							FSpeciesData SpeciesData;
+							if (USpeciesDatabase::GetSpeciesData(FName(*Appearance.SpeciesId), SpeciesData))
+							{
+								switch (SpeciesData.HairColorSource)
+								{
+									case EHairColorSource::ColorB: HairColor = Appearance.CharacterColor2; break;
+									case EHairColorSource::ColorC: HairColor = Appearance.CharacterColor3; break;
+									default: break; // ColorA - already set above
+								}
+							}
+						}
+
+						// Hair material only needs CharacterColor1 - it reads its single tint from there
+						for (int32 i = 0; i < HairComp->GetNumMaterials(); ++i)
+						{
+							UMaterialInstanceDynamic* HairMat = HairComp->CreateAndSetMaterialInstanceDynamic(i);
+							if (HairMat)
+							{
+								HairMat->SetVectorParameterValue(TEXT("CharacterColor1"), HairColor);
+							}
+						}
+
+						UE_LOG(LogTemp, Log, TEXT("NPCDataComponent '%s': Applied hair style '%s'"),
+							*NPCId, *Appearance.HairStyleId.ToString());
+					}
+				}
+				else
+				{
+					UE_LOG(LogTemp, Verbose, TEXT("NPCDataComponent '%s': HairStyleId set but no 'HairMesh'-tagged component found on owner"),
+						*NPCId);
+				}
 			}
 		}
 	}

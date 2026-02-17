@@ -88,6 +88,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Farming|Animation")
 	TSubclassOf<UAnimInstance> DefaultAnimationBlueprint;
 
+	/**
+	 * Secondary skeletal mesh for the hair/mane/crest/fin.
+	 * Created in the constructor and attached to the body mesh at "HairSocket".
+	 * Hidden by default; shown when ApplyHairStyle() is called with a valid ID.
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Farming|Appearance")
+	USkeletalMeshComponent* HairMeshComponent;
+
 	/** Get the current character save */
 	UFUNCTION(BlueprintCallable, Category = "Farming|Save")
 	UFarmingCharacterSaveGame* GetCharacterSave() const { return CharacterSave; }
@@ -109,24 +117,34 @@ public:
 	void ApplySpeciesAppearance(const FName& SpeciesID, ECharacterGender Gender);
 
 	/**
-	 * Apply body colors to all skeletal mesh material slots.
-	 * Each slot receives all three color parameters; the material graph decides which one it uses.
+	 * Apply body colors to all body mesh material slots, and update the hair mesh
+	 * color based on the species HairColorSource setting.
+	 * Each body slot receives all three color parameters; the material graph decides which one it uses.
 	 * Slot materials should expose CharacterColor1/2/3 vector parameters (matching the NPC system).
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Farming|Character")
 	void ApplyBodyColors(FLinearColor ColorA, FLinearColor ColorB, FLinearColor ColorC);
+
+	/**
+	 * Load a hair mesh from UHairStyleDatabase and attach it to the HairSocket.
+	 * Pass NAME_None to hide the hair mesh (e.g. a hairless species or bald option).
+	 * Color is NOT applied here - call ApplyBodyColors() after to tint the hair correctly.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Farming|Character")
+	void ApplyHairStyle(FName HairStyleId);
 
 	/** Server RPC: Set character species (called by owning client) */
 	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Farming|Character")
 	void ServerSetSpecies(const FName& SpeciesID, ECharacterGender Gender);
 
 	/**
-	 * Server RPC: Set full appearance including body colors.
-	 * Prefer this over ServerSetSpecies when colors need to be synchronised.
+	 * Server RPC: Set full appearance including body colors and hair style.
+	 * Prefer this over ServerSetSpecies when any appearance data needs to be synchronised.
 	 */
 	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Farming|Character")
 	void ServerSetAppearance(const FName& SpeciesID, ECharacterGender Gender,
-	                         FLinearColor ColorA, FLinearColor ColorB, FLinearColor ColorC);
+	                         FLinearColor ColorA, FLinearColor ColorB, FLinearColor ColorC,
+	                         FName HairStyleId);
 
 	/** Debug: Show player info above character */
 	UFUNCTION(BlueprintCallable, Category = "Farming|Debug")
@@ -159,6 +177,10 @@ protected:
 	/** Replicated body color C (CharacterColor3 on materials) */
 	UPROPERTY(ReplicatedUsing = OnRep_AppearanceData, BlueprintReadOnly, Category = "Farming|Character")
 	FLinearColor ReplicatedBodyColorC = FLinearColor::White;
+
+	/** Replicated hair/mane/crest style ID - looked up in UHairStyleDatabase */
+	UPROPERTY(ReplicatedUsing = OnRep_AppearanceData, BlueprintReadOnly, Category = "Farming|Character")
+	FName ReplicatedHairStyleId;
 
 	/** Called when any replicated appearance property changes */
 	UFUNCTION()

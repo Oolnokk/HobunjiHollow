@@ -92,6 +92,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Appearance")
 	FLinearColor BodyColorC = FLinearColor::White;
 
+	/**
+	 * Hair/mane/crest/fin style ID - references an entry in UHairStyleDatabase.
+	 * Leave as None for no hair mesh. The tint color is determined automatically
+	 * by the species HairColorSource setting.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Appearance")
+	FName HairStyleId;
+
 	/** Gear inventory items */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Inventory")
 	TArray<FGearItemSave> GearItems;
