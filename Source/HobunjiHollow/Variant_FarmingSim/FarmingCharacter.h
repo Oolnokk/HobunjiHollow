@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Data/SpeciesDatabase.h"
+#include "Math/Color.h"
 #include "FarmingCharacter.generated.h"
 
 class UCameraComponent;
@@ -103,13 +104,29 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Farming|Save")
 	void CreateNewCharacter(const FString& CharacterName, const FName& SpeciesID, ECharacterGender Gender);
 
-	/** Apply species appearance to character */
+	/** Apply species mesh and animation blueprint to character */
 	UFUNCTION(BlueprintCallable, Category = "Farming|Character")
 	void ApplySpeciesAppearance(const FName& SpeciesID, ECharacterGender Gender);
+
+	/**
+	 * Apply body colors to all skeletal mesh material slots.
+	 * Each slot receives all three color parameters; the material graph decides which one it uses.
+	 * Slot materials should expose CharacterColor1/2/3 vector parameters (matching the NPC system).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Farming|Character")
+	void ApplyBodyColors(FLinearColor ColorA, FLinearColor ColorB, FLinearColor ColorC);
 
 	/** Server RPC: Set character species (called by owning client) */
 	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Farming|Character")
 	void ServerSetSpecies(const FName& SpeciesID, ECharacterGender Gender);
+
+	/**
+	 * Server RPC: Set full appearance including body colors.
+	 * Prefer this over ServerSetSpecies when colors need to be synchronised.
+	 */
+	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Farming|Character")
+	void ServerSetAppearance(const FName& SpeciesID, ECharacterGender Gender,
+	                         FLinearColor ColorA, FLinearColor ColorB, FLinearColor ColorC);
 
 	/** Debug: Show player info above character */
 	UFUNCTION(BlueprintCallable, Category = "Farming|Debug")
@@ -124,16 +141,28 @@ protected:
 	UFarmingCharacterSaveGame* CharacterSave;
 
 	/** Replicated species ID - determines character appearance */
-	UPROPERTY(ReplicatedUsing = OnRep_SpeciesData, BlueprintReadOnly, Category = "Farming|Character")
+	UPROPERTY(ReplicatedUsing = OnRep_AppearanceData, BlueprintReadOnly, Category = "Farming|Character")
 	FName ReplicatedSpeciesID;
 
 	/** Replicated gender - determines character appearance */
-	UPROPERTY(ReplicatedUsing = OnRep_SpeciesData, BlueprintReadOnly, Category = "Farming|Character")
+	UPROPERTY(ReplicatedUsing = OnRep_AppearanceData, BlueprintReadOnly, Category = "Farming|Character")
 	ECharacterGender ReplicatedGender = ECharacterGender::Male;
 
-	/** Called when species data is replicated to apply appearance */
+	/** Replicated body color A (CharacterColor1 on materials) */
+	UPROPERTY(ReplicatedUsing = OnRep_AppearanceData, BlueprintReadOnly, Category = "Farming|Character")
+	FLinearColor ReplicatedBodyColorA = FLinearColor::White;
+
+	/** Replicated body color B (CharacterColor2 on materials) */
+	UPROPERTY(ReplicatedUsing = OnRep_AppearanceData, BlueprintReadOnly, Category = "Farming|Character")
+	FLinearColor ReplicatedBodyColorB = FLinearColor::White;
+
+	/** Replicated body color C (CharacterColor3 on materials) */
+	UPROPERTY(ReplicatedUsing = OnRep_AppearanceData, BlueprintReadOnly, Category = "Farming|Character")
+	FLinearColor ReplicatedBodyColorC = FLinearColor::White;
+
+	/** Called when any replicated appearance property changes */
 	UFUNCTION()
-	void OnRep_SpeciesData();
+	void OnRep_AppearanceData();
 
 	/** Restore character state from save data */
 	void RestoreFromSave();

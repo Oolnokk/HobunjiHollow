@@ -65,9 +65,11 @@ void AFarmingCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	// Replicate species appearance data to all clients
 	DOREPLIFETIME(AFarmingCharacter, ReplicatedSpeciesID);
 	DOREPLIFETIME(AFarmingCharacter, ReplicatedGender);
+	DOREPLIFETIME(AFarmingCharacter, ReplicatedBodyColorA);
+	DOREPLIFETIME(AFarmingCharacter, ReplicatedBodyColorB);
+	DOREPLIFETIME(AFarmingCharacter, ReplicatedBodyColorC);
 }
 
 void AFarmingCharacter::BeginPlay()
@@ -93,11 +95,12 @@ void AFarmingCharacter::BeginPlay()
 	}
 }
 
-void AFarmingCharacter::OnRep_SpeciesData()
+void AFarmingCharacter::OnRep_AppearanceData()
 {
-	// Called on clients when species data is replicated
-	UE_LOG(LogTemp, Log, TEXT("OnRep_SpeciesData: Applying appearance for %s"), *ReplicatedSpeciesID.ToString());
+	// Called on clients when any replicated appearance property changes
+	UE_LOG(LogTemp, Log, TEXT("OnRep_AppearanceData: Applying appearance for %s"), *ReplicatedSpeciesID.ToString());
 	ApplySpeciesAppearance(ReplicatedSpeciesID, ReplicatedGender);
+	ApplyBodyColors(ReplicatedBodyColorA, ReplicatedBodyColorB, ReplicatedBodyColorC);
 }
 
 void AFarmingCharacter::Tick(float DeltaTime)
@@ -148,20 +151,26 @@ void AFarmingCharacter::CreateNewCharacter(const FString& CharacterName, const F
 		CharacterSave->CharacterName = CharacterName;
 		CharacterSave->SpeciesID = SpeciesID;
 		CharacterSave->Gender = Gender;
+		// Colors stay at their default white values; let the player customise via the creation screen
 		CharacterSave->InitializeNewCharacter();
 
-		// Set species on server (will replicate to all clients)
+		const FLinearColor A = CharacterSave->BodyColorA;
+		const FLinearColor B = CharacterSave->BodyColorB;
+		const FLinearColor C = CharacterSave->BodyColorC;
+
 		if (HasAuthority())
 		{
-			// We're on the server, set directly
 			ReplicatedSpeciesID = SpeciesID;
 			ReplicatedGender = Gender;
+			ReplicatedBodyColorA = A;
+			ReplicatedBodyColorB = B;
+			ReplicatedBodyColorC = C;
 			ApplySpeciesAppearance(SpeciesID, Gender);
+			ApplyBodyColors(A, B, C);
 		}
 		else
 		{
-			// We're on a client, tell the server via RPC
-			ServerSetSpecies(SpeciesID, Gender);
+			ServerSetAppearance(SpeciesID, Gender, A, B, C);
 		}
 
 		UE_LOG(LogTemp, Log, TEXT("Created new character: %s (Species: %s, Gender: %d)"), *CharacterName, *SpeciesID.ToString(), (int32)Gender);
@@ -180,17 +189,18 @@ bool AFarmingCharacter::LoadCharacter(const FString& CharacterName)
 		{
 			UE_LOG(LogTemp, Log, TEXT("Loaded character: %s"), *CharacterName);
 
-			// Set species on server (will replicate to all clients)
 			if (HasAuthority())
 			{
-				// We're on the server, set directly
 				ReplicatedSpeciesID = CharacterSave->SpeciesID;
 				ReplicatedGender = CharacterSave->Gender;
+				ReplicatedBodyColorA = CharacterSave->BodyColorA;
+				ReplicatedBodyColorB = CharacterSave->BodyColorB;
+				ReplicatedBodyColorC = CharacterSave->BodyColorC;
 			}
 			else
 			{
-				// We're on a client, tell the server via RPC
-				ServerSetSpecies(CharacterSave->SpeciesID, CharacterSave->Gender);
+				ServerSetAppearance(CharacterSave->SpeciesID, CharacterSave->Gender,
+				                    CharacterSave->BodyColorA, CharacterSave->BodyColorB, CharacterSave->BodyColorC);
 			}
 
 			RestoreFromSave();
@@ -209,6 +219,11 @@ bool AFarmingCharacter::SaveCharacter()
 		UE_LOG(LogTemp, Error, TEXT("Cannot save: No character save exists"));
 		return false;
 	}
+
+	// Persist current appearance colors
+	CharacterSave->BodyColorA = ReplicatedBodyColorA;
+	CharacterSave->BodyColorB = ReplicatedBodyColorB;
+	CharacterSave->BodyColorC = ReplicatedBodyColorC;
 
 	// Update save data from current character state
 	if (GearInventory)
@@ -234,19 +249,32 @@ bool AFarmingCharacter::SaveCharacter()
 
 void AFarmingCharacter::ServerSetSpecies_Implementation(const FName& SpeciesID, ECharacterGender Gender)
 {
-	// Server only - set replicated properties
-	if (!HasAuthority())
-	{
-		return;
-	}
+	if (!HasAuthority()) return;
 
 	UE_LOG(LogTemp, Log, TEXT("Server: Setting species to %s for character"), *SpeciesID.ToString());
 
 	ReplicatedSpeciesID = SpeciesID;
 	ReplicatedGender = Gender;
 
-	// Apply locally on server
 	ApplySpeciesAppearance(SpeciesID, Gender);
+	// Colors unchanged - if you need colors too, call ServerSetAppearance instead
+}
+
+void AFarmingCharacter::ServerSetAppearance_Implementation(const FName& SpeciesID, ECharacterGender Gender,
+                                                           FLinearColor ColorA, FLinearColor ColorB, FLinearColor ColorC)
+{
+	if (!HasAuthority()) return;
+
+	UE_LOG(LogTemp, Log, TEXT("Server: Setting full appearance (Species=%s, Gender=%d)"), *SpeciesID.ToString(), (int32)Gender);
+
+	ReplicatedSpeciesID = SpeciesID;
+	ReplicatedGender = Gender;
+	ReplicatedBodyColorA = ColorA;
+	ReplicatedBodyColorB = ColorB;
+	ReplicatedBodyColorC = ColorC;
+
+	ApplySpeciesAppearance(SpeciesID, Gender);
+	ApplyBodyColors(ColorA, ColorB, ColorC);
 }
 
 void AFarmingCharacter::ApplySpeciesAppearance(const FName& SpeciesID, ECharacterGender Gender)
@@ -286,6 +314,32 @@ void AFarmingCharacter::ApplySpeciesAppearance(const FName& SpeciesID, ECharacte
 	}
 }
 
+void AFarmingCharacter::ApplyBodyColors(FLinearColor ColorA, FLinearColor ColorB, FLinearColor ColorC)
+{
+	USkeletalMeshComponent* MeshComp = GetMesh();
+	if (!MeshComp || MeshComp->GetNumMaterials() == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ApplyBodyColors: No mesh or no materials on %s"), *GetName());
+		return;
+	}
+
+	// Each material slot receives all three color parameters.
+	// The material graph decides which parameter drives its base colour,
+	// matching the same convention used by NPCDataComponent.
+	for (int32 i = 0; i < MeshComp->GetNumMaterials(); ++i)
+	{
+		UMaterialInstanceDynamic* DynMat = MeshComp->CreateAndSetMaterialInstanceDynamic(i);
+		if (DynMat)
+		{
+			DynMat->SetVectorParameterValue(TEXT("CharacterColor1"), ColorA);
+			DynMat->SetVectorParameterValue(TEXT("CharacterColor2"), ColorB);
+			DynMat->SetVectorParameterValue(TEXT("CharacterColor3"), ColorC);
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("ApplyBodyColors: Applied to %d material slot(s) on %s"), MeshComp->GetNumMaterials(), *GetName());
+}
+
 void AFarmingCharacter::DebugShowPlayerInfo()
 {
 	// Debug function to show player info
@@ -306,8 +360,11 @@ void AFarmingCharacter::RestoreFromSave()
 		return;
 	}
 
-	// Restore species appearance
+	// Restore species mesh
 	ApplySpeciesAppearance(CharacterSave->SpeciesID, CharacterSave->Gender);
+
+	// Restore body colors
+	ApplyBodyColors(CharacterSave->BodyColorA, CharacterSave->BodyColorB, CharacterSave->BodyColorC);
 
 	// Restore gear inventory
 	if (GearInventory)

@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/SaveGame.h"
 #include "Data/SpeciesDatabase.h"
+#include "Math/Color.h"
 #include "FarmingCharacterSaveGame.generated.h"
 
 /**
@@ -69,6 +70,27 @@ public:
 	/** Character gender */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Character")
 	ECharacterGender Gender;
+
+	/**
+	 * Body color A - primary region (fur, skin, scales, feathers - species-dependent).
+	 * Maps to CharacterColor1 on the skeletal mesh materials.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Appearance")
+	FLinearColor BodyColorA = FLinearColor::White;
+
+	/**
+	 * Body color B - secondary region (belly, underbelly, markings - species-dependent).
+	 * Maps to CharacterColor2 on the skeletal mesh materials.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Appearance")
+	FLinearColor BodyColorB = FLinearColor::White;
+
+	/**
+	 * Body color C - tertiary region (accents, spots, stripes - species-dependent).
+	 * Maps to CharacterColor3 on the skeletal mesh materials.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Appearance")
+	FLinearColor BodyColorC = FLinearColor::White;
 
 	/** Gear inventory items */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Inventory")
