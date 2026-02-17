@@ -12,6 +12,8 @@
 #include "FarmingCharacter.h"
 #include "FarmingGameMode.h"
 #include "Save/PlayerPreferencesSaveGame.h"
+#include "Inventory/InventoryComponent.h"
+#include "Inventory/HeldItemComponent.h"
 
 AFarmingPlayerController::AFarmingPlayerController()
 {
@@ -73,6 +75,31 @@ void AFarmingPlayerController::SetupInputComponent()
 		{
 			EnhancedInputComponent->BindAction(OpenInventoryAction, ETriggerEvent::Started, this, &AFarmingPlayerController::OnOpenInventory);
 		}
+
+		// Quick select - bind to started and completed for hold behavior
+		if (QuickSelectAction)
+		{
+			EnhancedInputComponent->BindAction(QuickSelectAction, ETriggerEvent::Started, this, &AFarmingPlayerController::OnQuickSelectStarted);
+			EnhancedInputComponent->BindAction(QuickSelectAction, ETriggerEvent::Completed, this, &AFarmingPlayerController::OnQuickSelectCompleted);
+		}
+
+		// Quick select scrolling
+		if (QuickSelectScrollAction)
+		{
+			EnhancedInputComponent->BindAction(QuickSelectScrollAction, ETriggerEvent::Triggered, this, &AFarmingPlayerController::OnQuickSelectScroll);
+		}
+
+		// Confirm action (select item, primary action with held item)
+		if (ConfirmAction)
+		{
+			EnhancedInputComponent->BindAction(ConfirmAction, ETriggerEvent::Started, this, &AFarmingPlayerController::OnConfirm);
+		}
+
+		// Cancel action (close menu, stow item)
+		if (CancelAction)
+		{
+			EnhancedInputComponent->BindAction(CancelAction, ETriggerEvent::Started, this, &AFarmingPlayerController::OnCancel);
+		}
 	}
 }
 
@@ -126,6 +153,127 @@ void AFarmingPlayerController::OnOpenInventory()
 {
 	// Inventory UI will be implemented later
 	UE_LOG(LogTemp, Log, TEXT("Open inventory pressed"));
+}
+
+void AFarmingPlayerController::OnQuickSelectStarted()
+{
+	AFarmingCharacter* FarmingChar = Cast<AFarmingCharacter>(GetPawn());
+	if (!FarmingChar)
+	{
+		return;
+	}
+
+	UInventoryComponent* Inventory = FarmingChar->FindComponentByClass<UInventoryComponent>();
+	if (Inventory)
+	{
+		Inventory->OpenQuickSelect();
+		UE_LOG(LogTemp, Log, TEXT("Quick select opened"));
+	}
+}
+
+void AFarmingPlayerController::OnQuickSelectCompleted()
+{
+	AFarmingCharacter* FarmingChar = Cast<AFarmingCharacter>(GetPawn());
+	if (!FarmingChar)
+	{
+		return;
+	}
+
+	UInventoryComponent* Inventory = FarmingChar->FindComponentByClass<UInventoryComponent>();
+	if (Inventory && Inventory->bQuickSelectOpen)
+	{
+		// If quick select is still open when button released, close without selecting
+		// (If confirm was pressed, it would have already closed)
+		Inventory->CloseQuickSelect();
+		UE_LOG(LogTemp, Log, TEXT("Quick select closed (button released)"));
+	}
+}
+
+void AFarmingPlayerController::OnQuickSelectScroll(const FInputActionValue& Value)
+{
+	AFarmingCharacter* FarmingChar = Cast<AFarmingCharacter>(GetPawn());
+	if (!FarmingChar)
+	{
+		return;
+	}
+
+	UInventoryComponent* Inventory = FarmingChar->FindComponentByClass<UInventoryComponent>();
+	if (Inventory && Inventory->bQuickSelectOpen)
+	{
+		// Get scroll direction from input (axis value)
+		float ScrollValue = Value.Get<float>();
+		if (FMath::Abs(ScrollValue) > 0.5f)
+		{
+			int32 Direction = ScrollValue > 0 ? 1 : -1;
+			Inventory->QuickSelectScroll(Direction);
+		}
+	}
+}
+
+void AFarmingPlayerController::OnConfirm()
+{
+	AFarmingCharacter* FarmingChar = Cast<AFarmingCharacter>(GetPawn());
+	if (!FarmingChar)
+	{
+		return;
+	}
+
+	UInventoryComponent* Inventory = FarmingChar->FindComponentByClass<UInventoryComponent>();
+	UHeldItemComponent* HeldItem = FarmingChar->FindComponentByClass<UHeldItemComponent>();
+
+	// If quick select is open, confirm the selection
+	if (Inventory && Inventory->bQuickSelectOpen)
+	{
+		FInventorySlot SelectedSlot = Inventory->QuickSelectConfirm();
+
+		// Hold the selected item
+		if (HeldItem && !SelectedSlot.IsEmpty())
+		{
+			HeldItem->HoldItem(SelectedSlot, Inventory->QuickSelectIndex);
+		}
+		return;
+	}
+
+	// If holding an item, perform primary action
+	if (HeldItem && HeldItem->IsHoldingItem())
+	{
+		FItemActionResult Result = HeldItem->PerformPrimaryAction(CurrentInteractable);
+		UE_LOG(LogTemp, Log, TEXT("Item action: %s (%s)"),
+			Result.bSuccess ? TEXT("Success") : TEXT("Failed"),
+			*Result.ResultMessage.ToString());
+		return;
+	}
+
+	// Otherwise, this is like an interact
+	OnInteract();
+}
+
+void AFarmingPlayerController::OnCancel()
+{
+	AFarmingCharacter* FarmingChar = Cast<AFarmingCharacter>(GetPawn());
+	if (!FarmingChar)
+	{
+		return;
+	}
+
+	UInventoryComponent* Inventory = FarmingChar->FindComponentByClass<UInventoryComponent>();
+	UHeldItemComponent* HeldItem = FarmingChar->FindComponentByClass<UHeldItemComponent>();
+
+	// If quick select is open, close it
+	if (Inventory && Inventory->bQuickSelectOpen)
+	{
+		Inventory->CloseQuickSelect();
+		UE_LOG(LogTemp, Log, TEXT("Quick select cancelled"));
+		return;
+	}
+
+	// If holding an item, stow it
+	if (HeldItem && HeldItem->IsHoldingItem())
+	{
+		HeldItem->StowItem();
+		UE_LOG(LogTemp, Log, TEXT("Item stowed"));
+		return;
+	}
 }
 
 void AFarmingPlayerController::UpdateInteractableFocus()

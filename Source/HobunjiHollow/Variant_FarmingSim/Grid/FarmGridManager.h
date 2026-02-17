@@ -8,6 +8,11 @@
 #include "MapDataTypes.h"
 #include "FarmGridManager.generated.h"
 
+class UGridFootprintComponent;
+class AGridPlaceableCrop;
+class UFarmingWorldSaveGame;
+struct FGridInteractionPoint;
+
 /**
  * World subsystem that manages the grid state for a level.
  * Handles terrain data, object placement, and spatial queries.
@@ -128,6 +133,20 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Grid")
 	bool RemoveObjectByActor(AActor* Object);
 
+	// ---- Interaction Queries ----
+
+	/** Get the GridFootprintComponent for the object at a coordinate (if any) */
+	UFUNCTION(BlueprintCallable, Category = "Grid|Interaction")
+	UGridFootprintComponent* GetFootprintAtTile(const FGridCoordinate& Coord) const;
+
+	/** Check if there's an interaction point at a coordinate */
+	UFUNCTION(BlueprintCallable, Category = "Grid|Interaction")
+	bool HasInteractionAtTile(const FGridCoordinate& Coord) const;
+
+	/** Get all actors with GridFootprintComponent that have interaction points */
+	UFUNCTION(BlueprintCallable, Category = "Grid|Interaction")
+	TArray<AActor*> GetAllInteractableActors() const;
+
 	// ---- Zone Queries ----
 
 	/** Check if a coordinate is within the playable bounds */
@@ -242,6 +261,28 @@ public:
 	/** Sample terrain height at a world XY position */
 	UFUNCTION(BlueprintCallable, Category = "Grid")
 	float SampleHeightAtWorldPosition(float WorldX, float WorldY) const;
+
+	// ---- Crop Management ----
+
+	/** Plant a crop at the given grid location */
+	UFUNCTION(BlueprintCallable, Category = "Grid|Crops")
+	AGridPlaceableCrop* PlantCrop(TSubclassOf<AGridPlaceableCrop> CropClass, const FGridCoordinate& Coord);
+
+	/** Get all placed crops in the world */
+	UFUNCTION(BlueprintCallable, Category = "Grid|Crops")
+	TArray<AGridPlaceableCrop*> GetAllCrops() const;
+
+	/** Save all crops to world save */
+	UFUNCTION(BlueprintCallable, Category = "Grid|Crops")
+	void SaveCropsToWorldSave(UFarmingWorldSaveGame* WorldSave);
+
+	/** Restore all crops from world save */
+	UFUNCTION(BlueprintCallable, Category = "Grid|Crops")
+	void RestoreCropsFromWorldSave(UFarmingWorldSaveGame* WorldSave, TSubclassOf<AGridPlaceableCrop> DefaultCropClass);
+
+	/** Called when day advances - updates all crops */
+	UFUNCTION(BlueprintCallable, Category = "Grid|Crops")
+	void OnDayAdvanceForCrops(int32 CurrentSeason);
 
 protected:
 	UPROPERTY()

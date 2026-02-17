@@ -9,6 +9,7 @@
 
 class UStaticMeshComponent;
 class UCapsuleComponent;
+class UGridFootprintComponent;
 
 /**
  * Tree types that can be placed on the grid
@@ -38,6 +39,8 @@ enum class ETreeGrowthStage : uint8
 
 /**
  * A tree that can be placed on the grid, chopped, and regenerates over time.
+ * Uses separate mesh components for each growth stage that are shown/hidden,
+ * allowing precise positioning in the viewport.
  */
 UCLASS(BlueprintType, Blueprintable)
 class HOBUNJIHOLLOW_API AGridPlaceableTree : public AActor
@@ -56,6 +59,16 @@ public:
 	/** Current growth stage */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tree", SaveGame)
 	ETreeGrowthStage GrowthStage = ETreeGrowthStage::Mature;
+
+#if WITH_EDITORONLY_DATA
+	/** Which stage to preview in editor (for positioning meshes) */
+	UPROPERTY(EditAnywhere, Category = "Tree|Editor Preview")
+	ETreeGrowthStage EditorPreviewStage = ETreeGrowthStage::Mature;
+
+	/** Show all stage meshes at once (for comparing positions) */
+	UPROPERTY(EditAnywhere, Category = "Tree|Editor Preview")
+	bool bShowAllStagesInEditor = false;
+#endif
 
 	/** Whether this tree regenerates after being chopped */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tree")
@@ -108,18 +121,32 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	USceneComponent* RootSceneComponent;
 
+	/** Grid footprint for placement preview and scaling */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
-	UStaticMeshComponent* TrunkMesh;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
-	UStaticMeshComponent* LeavesMesh;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
-	UStaticMeshComponent* StumpMesh;
+	UGridFootprintComponent* FootprintComponent;
 
 	/** Capsule collision for smooth character sliding */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	UCapsuleComponent* CollisionCapsule;
+
+	// ---- Growth Stage Mesh Components ----
+	// Each mesh component can be positioned precisely in the viewport.
+	// Only the current stage's mesh is visible at runtime.
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Growth Stages")
+	UStaticMeshComponent* SeedMeshComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Growth Stages")
+	UStaticMeshComponent* SaplingMeshComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Growth Stages")
+	UStaticMeshComponent* YoungMeshComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Growth Stages")
+	UStaticMeshComponent* MatureMeshComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Growth Stages")
+	UStaticMeshComponent* StumpMeshComponent;
 
 	// ---- Collision Configuration ----
 
@@ -145,9 +172,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Tree")
 	void OnDayAdvance();
 
-	/** Update visual based on growth stage */
+	/** Update visual based on growth stage (shows/hides appropriate mesh) */
 	UFUNCTION(BlueprintCallable, Category = "Tree")
 	void UpdateVisuals();
+
+	/** Set the grid position */
+	UFUNCTION(BlueprintCallable, Category = "Tree")
+	void SetGridPosition(const FGridCoordinate& Position);
 
 	// ---- Events ----
 
@@ -168,4 +199,21 @@ protected:
 
 	/** Set growth stage and update visuals */
 	void SetGrowthStage(ETreeGrowthStage NewStage);
+
+	/** Helper to get mesh component for a given stage */
+	UStaticMeshComponent* GetMeshComponentForStage(ETreeGrowthStage Stage) const;
+
+	/** Hide all stage meshes */
+	void HideAllStageMeshes();
+
+	/** Show all stage meshes (for editor preview) */
+	void ShowAllStageMeshes();
+
+	/** Update collision based on growth stage */
+	void UpdateCollision();
+
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+	void UpdateEditorPreview();
+#endif
 };
