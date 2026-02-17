@@ -26,12 +26,15 @@ struct FHairStyleData
 	FText DisplayName;
 
 	/**
-	 * Skeletal mesh for this hairstyle.
+	 * Static mesh for this hairstyle.
 	 * Must be exported as FBX with a single material slot exposing "CharacterColor1".
-	 * Does not need to share the body skeleton - it attaches via HairSocket.
+	 * Attaches to HairSocket on the body mesh - no shared skeleton needed.
+	 * Use a Static Mesh (not Skeletal) for rigid hair; it's lighter and simpler.
+	 * Only use a Skeletal Mesh (via a separate component) if the hair needs its
+	 * own bone physics - that's a separate workflow (Chaos Hair / cloth sim).
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hair")
-	TSoftObjectPtr<USkeletalMesh> HairMesh;
+	TSoftObjectPtr<UStaticMesh> HairMesh;
 
 	/** Thumbnail shown in the character creation UI */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hair|UI")
@@ -45,8 +48,8 @@ struct FHairStyleData
  *
  * Workflow reminder:
  *   1. Vertex-paint hair GLB in a single placeholder color (it has no body-color regions).
- *   2. Convert to FBX in Blender (Armature > Add Leaf Bones OFF, Forward -Y, Up Z).
- *   3. Import into UE5 as Skeletal Mesh; let UE create a placeholder material.
+ *   2. Convert to FBX in Blender (no armature needed - just export the mesh, Forward -Y, Up Z).
+ *   3. Import into UE5 as Static Mesh; let UE create a placeholder material.
  *   4. Assign a material that exposes "CharacterColor1" vector param -> Base Color.
  *   5. Add an entry here; set HairMesh to the imported asset.
  *   6. In the species DataTable, set HairColorSource to whichever body color

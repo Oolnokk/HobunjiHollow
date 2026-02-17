@@ -6,6 +6,7 @@
 #include "Data/SpeciesDatabase.h"
 #include "Data/HairStyleDatabase.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "GameFramework/Character.h"
 #include "Net/UnrealNetwork.h"
 
@@ -312,16 +313,16 @@ void UNPCDataComponent::ApplyAppearanceToMesh(USkeletalMeshComponent* MeshCompon
 			FHairStyleData HairData;
 			if (HairDB->GetHairStyleData(Appearance.HairStyleId, HairData))
 			{
-				// Find a hair mesh component on the owner by tag
-				USkeletalMeshComponent* HairComp = nullptr;
-				TArray<USkeletalMeshComponent*> MeshComponents;
+				// Find a static mesh component on the owner tagged "HairMesh"
+				UStaticMeshComponent* HairComp = nullptr;
+				TArray<UStaticMeshComponent*> StaticMeshComponents;
 				AActor* Owner = GetOwner();
 				if (Owner)
 				{
-					Owner->GetComponents<USkeletalMeshComponent>(MeshComponents);
-					for (USkeletalMeshComponent* Comp : MeshComponents)
+					Owner->GetComponents<UStaticMeshComponent>(StaticMeshComponents);
+					for (UStaticMeshComponent* Comp : StaticMeshComponents)
 					{
-						if (Comp != MeshComponent && Comp->ComponentHasTag(FName("HairMesh")))
+						if (Comp->ComponentHasTag(FName("HairMesh")))
 						{
 							HairComp = Comp;
 							break;
@@ -331,10 +332,10 @@ void UNPCDataComponent::ApplyAppearanceToMesh(USkeletalMeshComponent* MeshCompon
 
 				if (HairComp)
 				{
-					USkeletalMesh* HairMesh = HairData.HairMesh.LoadSynchronous();
+					UStaticMesh* HairMesh = HairData.HairMesh.LoadSynchronous();
 					if (HairMesh)
 					{
-						HairComp->SetSkeletalMesh(HairMesh);
+						HairComp->SetStaticMesh(HairMesh);
 						HairComp->AttachToComponent(MeshComponent,
 							FAttachmentTransformRules::SnapToTargetNotIncludingScale,
 							HairDB->HairAttachSocket);

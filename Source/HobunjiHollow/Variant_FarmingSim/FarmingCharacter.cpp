@@ -6,6 +6,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Inventory/InventoryComponent.h"
 #include "Inventory/GearInventoryComponent.h"
 #include "Save/FarmingCharacterSaveGame.h"
@@ -60,9 +61,9 @@ AFarmingCharacter::AFarmingCharacter()
 	// Default mouse aim trace channel
 	MouseAimTraceChannel = UEngineTypes::ConvertToTraceType(ECC_Visibility);
 
-	// Hair mesh component - attached to the body mesh's HairSocket at construction time.
-	// Snapping to the correct socket happens once the body mesh is set in ApplySpeciesAppearance.
-	HairMeshComponent = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("HairMesh"));
+	// Static mesh component for hair/mane/crest/fin - no skeleton needed.
+	// Re-attached to HairSocket on the current body mesh inside ApplyHairStyle().
+	HairMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("HairMesh"));
 	HairMeshComponent->SetupAttachment(GetMesh());
 	HairMeshComponent->SetHiddenInGame(true);
 	HairMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -342,7 +343,7 @@ void AFarmingCharacter::ApplyHairStyle(FName HairStyleId)
 	if (HairStyleId.IsNone())
 	{
 		HairMeshComponent->SetHiddenInGame(true);
-		HairMeshComponent->SetSkeletalMesh(nullptr);
+		HairMeshComponent->SetStaticMesh(nullptr);
 		return;
 	}
 
@@ -360,14 +361,14 @@ void AFarmingCharacter::ApplyHairStyle(FName HairStyleId)
 		return;
 	}
 
-	USkeletalMesh* HairMesh = HairData.HairMesh.LoadSynchronous();
+	UStaticMesh* HairMesh = HairData.HairMesh.LoadSynchronous();
 	if (!HairMesh)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("ApplyHairStyle: Failed to load mesh for hair style '%s'"), *HairStyleId.ToString());
 		return;
 	}
 
-	HairMeshComponent->SetSkeletalMesh(HairMesh);
+	HairMeshComponent->SetStaticMesh(HairMesh);
 
 	// Re-attach to the head socket on the current body mesh.
 	// This must happen after ApplySpeciesAppearance() has set the body mesh.
@@ -407,7 +408,7 @@ void AFarmingCharacter::ApplyBodyColors(FLinearColor ColorA, FLinearColor ColorB
 	}
 
 	// Hair mesh - single color, chosen by the species HairColorSource setting
-	if (HairMeshComponent && HairMeshComponent->GetSkeletalMeshAsset() &&
+	if (HairMeshComponent && HairMeshComponent->GetStaticMesh() &&
 		HairMeshComponent->GetNumMaterials() > 0)
 	{
 		FLinearColor HairColor = ColorA; // Default: inherit primary body color

@@ -13,6 +13,7 @@ class USpringArmComponent;
 class UFarmingCharacterSaveGame;
 class UInventoryComponent;
 class UGearInventoryComponent;
+class UStaticMeshComponent;
 class UInputAction;
 struct FInputActionValue;
 
@@ -89,12 +90,13 @@ public:
 	TSubclassOf<UAnimInstance> DefaultAnimationBlueprint;
 
 	/**
-	 * Secondary skeletal mesh for the hair/mane/crest/fin.
+	 * Static mesh component for the hair/mane/crest/fin.
 	 * Created in the constructor and attached to the body mesh at "HairSocket".
 	 * Hidden by default; shown when ApplyHairStyle() is called with a valid ID.
+	 * Static mesh is correct for rigid hair; no shared skeleton required.
 	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Farming|Appearance")
-	USkeletalMeshComponent* HairMeshComponent;
+	UStaticMeshComponent* HairMeshComponent;
 
 	/** Get the current character save */
 	UFUNCTION(BlueprintCallable, Category = "Farming|Save")
