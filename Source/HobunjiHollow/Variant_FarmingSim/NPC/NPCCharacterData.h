@@ -6,6 +6,7 @@
 #include "Engine/DataAsset.h"
 #include "Grid/GridTypes.h"
 #include "Data/SpeciesDatabase.h"
+#include "Data/ClothingDatabase.h"
 #include "NPCCharacterData.generated.h"
 
 class USkeletalMesh;
@@ -308,13 +309,39 @@ struct FNPCAppearance
 	/**
 	 * Hair/mane/crest/fin style ID - looked up in UHairStyleDatabase at runtime.
 	 * Leave as None to show no hair mesh (bald, or species without head adornments).
-	 * The hair mesh receives whichever body color is nominated by the species
-	 * HairColorSource field in the Species DataTable.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Hair")
 	FName HairStyleId;
 
-	/** Outfit/clothing ID */
+	/**
+	 * Beard/facial hair style ID - looked up in UBeardStyleDatabase at runtime.
+	 * Color is driven by species BeardColorSource, independently from hair.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Hair")
+	FName BeardStyleId;
+
+	// ---- Clothing ----
+
+	/** Clothing dye A - CharacterColor1 on all clothing material slots. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Clothing")
+	FLinearColor ClothingDyeA = FLinearColor::White;
+
+	/** Clothing dye B - CharacterColor2 on clothing materials. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Clothing")
+	FLinearColor ClothingDyeB = FLinearColor::White;
+
+	/** Clothing dye C - CharacterColor3 on clothing materials. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Clothing")
+	FLinearColor ClothingDyeC = FLinearColor::White;
+
+	/**
+	 * Equipped clothing items per slot.
+	 * Passed to UClothingComponent on the NPC actor if one is present.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Clothing")
+	TArray<FEquippedClothingSlot> Clothing;
+
+	/** Outfit/clothing ID (legacy) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance")
 	FString OutfitId;
 

@@ -12,6 +12,8 @@
 #include "Save/FarmingCharacterSaveGame.h"
 #include "Data/SpeciesDatabase.h"
 #include "Data/HairStyleDatabase.h"
+#include "Data/BeardStyleDatabase.h"
+#include "Clothing/ClothingComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/DataTable.h"
 #include "EnhancedInputComponent.h"
@@ -61,13 +63,22 @@ AFarmingCharacter::AFarmingCharacter()
 	// Default mouse aim trace channel
 	MouseAimTraceChannel = UEngineTypes::ConvertToTraceType(ECC_Visibility);
 
-	// Static mesh component for hair/mane/crest/fin - no skeleton needed.
-	// Re-attached to HairSocket on the current body mesh inside ApplyHairStyle().
+	// Hair - static mesh, re-snapped to HairSocket inside ApplyHairStyle()
 	HairMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("HairMesh"));
 	HairMeshComponent->SetupAttachment(GetMesh());
 	HairMeshComponent->SetHiddenInGame(true);
 	HairMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	HairMeshComponent->bCastDynamicShadow = false;
+
+	// Beard - static mesh, re-snapped to BeardSocket inside ApplyBeardStyle()
+	BeardMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BeardMesh"));
+	BeardMeshComponent->SetupAttachment(GetMesh());
+	BeardMeshComponent->SetHiddenInGame(true);
+	BeardMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	BeardMeshComponent->bCastDynamicShadow = false;
+
+	// Clothing component - manages all 11 clothing slots at runtime
+	ClothingComponent = CreateDefaultSubobject<UClothingComponent>(TEXT("ClothingComponent"));
 
 	PrimaryActorTick.bCanEverTick = true;
 }
@@ -82,6 +93,11 @@ void AFarmingCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	DOREPLIFETIME(AFarmingCharacter, ReplicatedBodyColorB);
 	DOREPLIFETIME(AFarmingCharacter, ReplicatedBodyColorC);
 	DOREPLIFETIME(AFarmingCharacter, ReplicatedHairStyleId);
+	DOREPLIFETIME(AFarmingCharacter, ReplicatedBeardStyleId);
+	DOREPLIFETIME(AFarmingCharacter, ReplicatedEquippedClothing);
+	DOREPLIFETIME(AFarmingCharacter, ReplicatedClothingDyeA);
+	DOREPLIFETIME(AFarmingCharacter, ReplicatedClothingDyeB);
+	DOREPLIFETIME(AFarmingCharacter, ReplicatedClothingDyeC);
 }
 
 void AFarmingCharacter::BeginPlay()
@@ -109,11 +125,21 @@ void AFarmingCharacter::BeginPlay()
 
 void AFarmingCharacter::OnRep_AppearanceData()
 {
-	// Called on clients when any replicated appearance property changes
-	UE_LOG(LogTemp, Log, TEXT("OnRep_AppearanceData: Applying appearance for %s"), *ReplicatedSpeciesID.ToString());
+	UE_LOG(LogTemp, Log, TEXT("OnRep_AppearanceData: %s"), *ReplicatedSpeciesID.ToString());
 	ApplySpeciesAppearance(ReplicatedSpeciesID, ReplicatedGender);
 	ApplyHairStyle(ReplicatedHairStyleId);
+	ApplyBeardStyle(ReplicatedBeardStyleId);
 	ApplyBodyColors(ReplicatedBodyColorA, ReplicatedBodyColorB, ReplicatedBodyColorC);
+}
+
+void AFarmingCharacter::OnRep_ClothingData()
+{
+	if (ClothingComponent)
+	{
+		ClothingComponent->EquippedItems = ReplicatedEquippedClothing;
+		ClothingComponent->ApplyAllEquipped();
+		ClothingComponent->ApplyDyes(ReplicatedClothingDyeA, ReplicatedClothingDyeB, ReplicatedClothingDyeC);
+	}
 }
 
 void AFarmingCharacter::Tick(float DeltaTime)
@@ -171,6 +197,7 @@ void AFarmingCharacter::CreateNewCharacter(const FString& CharacterName, const F
 		const FLinearColor B = CharacterSave->BodyColorB;
 		const FLinearColor C = CharacterSave->BodyColorC;
 		const FName Hair = CharacterSave->HairStyleId;
+		const FName Beard = CharacterSave->BeardStyleId;
 
 		if (HasAuthority())
 		{
@@ -180,13 +207,16 @@ void AFarmingCharacter::CreateNewCharacter(const FString& CharacterName, const F
 			ReplicatedBodyColorB = B;
 			ReplicatedBodyColorC = C;
 			ReplicatedHairStyleId = Hair;
+			ReplicatedBeardStyleId = Beard;
 			ApplySpeciesAppearance(SpeciesID, Gender);
 			ApplyHairStyle(Hair);
+			ApplyBeardStyle(Beard);
 			ApplyBodyColors(A, B, C);
+			// New characters start with no clothing - nothing to equip yet
 		}
 		else
 		{
-			ServerSetAppearance(SpeciesID, Gender, A, B, C, Hair);
+			ServerSetAppearance(SpeciesID, Gender, A, B, C, Hair, Beard);
 		}
 
 		UE_LOG(LogTemp, Log, TEXT("Created new character: %s (Species: %s, Gender: %d)"), *CharacterName, *SpeciesID.ToString(), (int32)Gender);
@@ -213,12 +243,19 @@ bool AFarmingCharacter::LoadCharacter(const FString& CharacterName)
 				ReplicatedBodyColorB = CharacterSave->BodyColorB;
 				ReplicatedBodyColorC = CharacterSave->BodyColorC;
 				ReplicatedHairStyleId = CharacterSave->HairStyleId;
+				ReplicatedBeardStyleId = CharacterSave->BeardStyleId;
+				ReplicatedEquippedClothing = CharacterSave->EquippedClothing;
+				ReplicatedClothingDyeA = CharacterSave->ClothingDyeA;
+				ReplicatedClothingDyeB = CharacterSave->ClothingDyeB;
+				ReplicatedClothingDyeC = CharacterSave->ClothingDyeC;
 			}
 			else
 			{
 				ServerSetAppearance(CharacterSave->SpeciesID, CharacterSave->Gender,
 				                    CharacterSave->BodyColorA, CharacterSave->BodyColorB, CharacterSave->BodyColorC,
-				                    CharacterSave->HairStyleId);
+				                    CharacterSave->HairStyleId, CharacterSave->BeardStyleId);
+				ServerSetClothing(CharacterSave->EquippedClothing,
+				                  CharacterSave->ClothingDyeA, CharacterSave->ClothingDyeB, CharacterSave->ClothingDyeC);
 			}
 
 			RestoreFromSave();
@@ -243,6 +280,11 @@ bool AFarmingCharacter::SaveCharacter()
 	CharacterSave->BodyColorB = ReplicatedBodyColorB;
 	CharacterSave->BodyColorC = ReplicatedBodyColorC;
 	CharacterSave->HairStyleId = ReplicatedHairStyleId;
+	CharacterSave->BeardStyleId = ReplicatedBeardStyleId;
+	CharacterSave->EquippedClothing = ReplicatedEquippedClothing;
+	CharacterSave->ClothingDyeA = ReplicatedClothingDyeA;
+	CharacterSave->ClothingDyeB = ReplicatedClothingDyeB;
+	CharacterSave->ClothingDyeC = ReplicatedClothingDyeC;
 
 	// Update save data from current character state
 	if (GearInventory)
@@ -281,12 +323,12 @@ void AFarmingCharacter::ServerSetSpecies_Implementation(const FName& SpeciesID, 
 
 void AFarmingCharacter::ServerSetAppearance_Implementation(const FName& SpeciesID, ECharacterGender Gender,
                                                            FLinearColor ColorA, FLinearColor ColorB, FLinearColor ColorC,
-                                                           FName HairStyleId)
+                                                           FName HairStyleId, FName BeardStyleId)
 {
 	if (!HasAuthority()) return;
 
-	UE_LOG(LogTemp, Log, TEXT("Server: Setting full appearance (Species=%s, Gender=%d, Hair=%s)"),
-		*SpeciesID.ToString(), (int32)Gender, *HairStyleId.ToString());
+	UE_LOG(LogTemp, Log, TEXT("Server: Appearance (Species=%s, Gender=%d, Hair=%s, Beard=%s)"),
+		*SpeciesID.ToString(), (int32)Gender, *HairStyleId.ToString(), *BeardStyleId.ToString());
 
 	ReplicatedSpeciesID = SpeciesID;
 	ReplicatedGender = Gender;
@@ -294,10 +336,30 @@ void AFarmingCharacter::ServerSetAppearance_Implementation(const FName& SpeciesI
 	ReplicatedBodyColorB = ColorB;
 	ReplicatedBodyColorC = ColorC;
 	ReplicatedHairStyleId = HairStyleId;
+	ReplicatedBeardStyleId = BeardStyleId;
 
 	ApplySpeciesAppearance(SpeciesID, Gender);
 	ApplyHairStyle(HairStyleId);
+	ApplyBeardStyle(BeardStyleId);
 	ApplyBodyColors(ColorA, ColorB, ColorC);
+}
+
+void AFarmingCharacter::ServerSetClothing_Implementation(const TArray<FEquippedClothingSlot>& EquippedClothing,
+                                                         FLinearColor DyeA, FLinearColor DyeB, FLinearColor DyeC)
+{
+	if (!HasAuthority()) return;
+
+	ReplicatedEquippedClothing = EquippedClothing;
+	ReplicatedClothingDyeA = DyeA;
+	ReplicatedClothingDyeB = DyeB;
+	ReplicatedClothingDyeC = DyeC;
+
+	if (ClothingComponent)
+	{
+		ClothingComponent->EquippedItems = EquippedClothing;
+		ClothingComponent->ApplyAllEquipped();
+		ClothingComponent->ApplyDyes(DyeA, DyeB, DyeC);
+	}
 }
 
 void AFarmingCharacter::ApplySpeciesAppearance(const FName& SpeciesID, ECharacterGender Gender)
@@ -407,34 +469,100 @@ void AFarmingCharacter::ApplyBodyColors(FLinearColor ColorA, FLinearColor ColorB
 		}
 	}
 
-	// Hair mesh - single color, chosen by the species HairColorSource setting
+	// Resolve species-specific color sources once (shared by hair and beard)
+	FSpeciesData SpeciesData;
+	const bool bHasSpecies = USpeciesDatabase::GetSpeciesData(ReplicatedSpeciesID, SpeciesData);
+
+	// Hair mesh - single color from species HairColorSource
 	if (HairMeshComponent && HairMeshComponent->GetStaticMesh() &&
 		HairMeshComponent->GetNumMaterials() > 0)
 	{
-		FLinearColor HairColor = ColorA; // Default: inherit primary body color
-
-		FSpeciesData SpeciesData;
-		if (USpeciesDatabase::GetSpeciesData(ReplicatedSpeciesID, SpeciesData))
+		FLinearColor HairColor = ColorA;
+		if (bHasSpecies)
 		{
 			switch (SpeciesData.HairColorSource)
 			{
 				case EHairColorSource::ColorB: HairColor = ColorB; break;
 				case EHairColorSource::ColorC: HairColor = ColorC; break;
-				default: break; // ColorA already set
+				default: break;
 			}
 		}
-
 		for (int32 i = 0; i < HairMeshComponent->GetNumMaterials(); ++i)
 		{
 			UMaterialInstanceDynamic* HairMat = HairMeshComponent->CreateAndSetMaterialInstanceDynamic(i);
-			if (HairMat)
+			if (HairMat) HairMat->SetVectorParameterValue(TEXT("CharacterColor1"), HairColor);
+		}
+	}
+
+	// Beard mesh - single color from species BeardColorSource (independent of hair)
+	if (BeardMeshComponent && BeardMeshComponent->GetStaticMesh() &&
+		BeardMeshComponent->GetNumMaterials() > 0)
+	{
+		FLinearColor BeardColor = ColorA;
+		if (bHasSpecies)
+		{
+			switch (SpeciesData.BeardColorSource)
 			{
-				HairMat->SetVectorParameterValue(TEXT("CharacterColor1"), HairColor);
+				case EHairColorSource::ColorB: BeardColor = ColorB; break;
+				case EHairColorSource::ColorC: BeardColor = ColorC; break;
+				default: break;
 			}
+		}
+		for (int32 i = 0; i < BeardMeshComponent->GetNumMaterials(); ++i)
+		{
+			UMaterialInstanceDynamic* BeardMat = BeardMeshComponent->CreateAndSetMaterialInstanceDynamic(i);
+			if (BeardMat) BeardMat->SetVectorParameterValue(TEXT("CharacterColor1"), BeardColor);
 		}
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("ApplyBodyColors: Applied to %d body slot(s) on %s"), MeshComp->GetNumMaterials(), *GetName());
+}
+
+void AFarmingCharacter::ApplyBeardStyle(FName BeardStyleId)
+{
+	if (BeardStyleId.IsNone())
+	{
+		BeardMeshComponent->SetHiddenInGame(true);
+		BeardMeshComponent->SetStaticMesh(nullptr);
+		return;
+	}
+
+	UBeardStyleDatabase* BeardDB = UBeardStyleDatabase::Get();
+	if (!BeardDB)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ApplyBeardStyle: No BeardStyleDatabase registered."));
+		return;
+	}
+
+	FBeardStyleData BeardData;
+	if (!BeardDB->GetBeardStyleData(BeardStyleId, BeardData))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ApplyBeardStyle: Beard style '%s' not found."), *BeardStyleId.ToString());
+		return;
+	}
+
+	UStaticMesh* BeardMesh = BeardData.BeardMesh.LoadSynchronous();
+	if (!BeardMesh) return;
+
+	BeardMeshComponent->SetStaticMesh(BeardMesh);
+
+	if (USkeletalMeshComponent* BodyMesh = GetMesh())
+	{
+		BeardMeshComponent->AttachToComponent(BodyMesh,
+			FAttachmentTransformRules::SnapToTargetNotIncludingScale,
+			BeardDB->BeardAttachSocket);
+	}
+
+	BeardMeshComponent->SetHiddenInGame(false);
+	BeardMeshComponent->SetVisibility(true);
+}
+
+void AFarmingCharacter::ApplyClothingDyes(FLinearColor DyeA, FLinearColor DyeB, FLinearColor DyeC)
+{
+	if (ClothingComponent)
+	{
+		ClothingComponent->ApplyDyes(DyeA, DyeB, DyeC);
+	}
 }
 
 void AFarmingCharacter::DebugShowPlayerInfo()
@@ -457,10 +585,19 @@ void AFarmingCharacter::RestoreFromSave()
 		return;
 	}
 
-	// Restore species mesh, then hair (hair re-attaches to the new body mesh socket), then colors
+	// Order matters: mesh first, then adornments (they snap to sockets on new mesh), then colors
 	ApplySpeciesAppearance(CharacterSave->SpeciesID, CharacterSave->Gender);
 	ApplyHairStyle(CharacterSave->HairStyleId);
+	ApplyBeardStyle(CharacterSave->BeardStyleId);
 	ApplyBodyColors(CharacterSave->BodyColorA, CharacterSave->BodyColorB, CharacterSave->BodyColorC);
+
+	// Clothing: restore items then apply dyes
+	if (ClothingComponent)
+	{
+		ClothingComponent->EquippedItems = CharacterSave->EquippedClothing;
+		ClothingComponent->ApplyAllEquipped();
+		ClothingComponent->ApplyDyes(CharacterSave->ClothingDyeA, CharacterSave->ClothingDyeB, CharacterSave->ClothingDyeC);
+	}
 
 	// Restore gear inventory
 	if (GearInventory)

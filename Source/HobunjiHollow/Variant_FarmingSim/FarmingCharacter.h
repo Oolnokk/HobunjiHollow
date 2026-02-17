@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Data/SpeciesDatabase.h"
+#include "Data/ClothingDatabase.h"
 #include "Math/Color.h"
 #include "FarmingCharacter.generated.h"
 
@@ -14,6 +15,7 @@ class UFarmingCharacterSaveGame;
 class UInventoryComponent;
 class UGearInventoryComponent;
 class UStaticMeshComponent;
+class UClothingComponent;
 class UInputAction;
 struct FInputActionValue;
 
@@ -91,12 +93,25 @@ public:
 
 	/**
 	 * Static mesh component for the hair/mane/crest/fin.
-	 * Created in the constructor and attached to the body mesh at "HairSocket".
-	 * Hidden by default; shown when ApplyHairStyle() is called with a valid ID.
-	 * Static mesh is correct for rigid hair; no shared skeleton required.
+	 * Attached to "HairSocket" on the body mesh. Hidden until ApplyHairStyle() is called.
 	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Farming|Appearance")
 	UStaticMeshComponent* HairMeshComponent;
+
+	/**
+	 * Static mesh component for the beard/facial hair.
+	 * Attached to "BeardSocket" on the body mesh. Hidden until ApplyBeardStyle() is called.
+	 * Color is driven by the species BeardColorSource, independently from HairColorSource.
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Farming|Appearance")
+	UStaticMeshComponent* BeardMeshComponent;
+
+	/**
+	 * Manages all 11 clothing slots, Leader Pose mesh components, dye colors,
+	 * bone thickness morph targets, and deformation MPC parameters.
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Farming|Appearance")
+	UClothingComponent* ClothingComponent;
 
 	/** Get the current character save */
 	UFUNCTION(BlueprintCallable, Category = "Farming|Save")
@@ -129,24 +144,46 @@ public:
 
 	/**
 	 * Load a hair mesh from UHairStyleDatabase and attach it to the HairSocket.
-	 * Pass NAME_None to hide the hair mesh (e.g. a hairless species or bald option).
-	 * Color is NOT applied here - call ApplyBodyColors() after to tint the hair correctly.
+	 * Pass NAME_None to hide the hair mesh.
+	 * Color is NOT applied here - call ApplyBodyColors() after to tint correctly.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Farming|Character")
 	void ApplyHairStyle(FName HairStyleId);
+
+	/**
+	 * Load a beard mesh from UBeardStyleDatabase and attach it to the BeardSocket.
+	 * Pass NAME_None to hide the beard mesh.
+	 * Color is NOT applied here - call ApplyBodyColors() after to tint correctly.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Farming|Character")
+	void ApplyBeardStyle(FName BeardStyleId);
+
+	/**
+	 * Apply clothing dye colors to all equipped clothing slots.
+	 * DyeA/B/C map to CharacterColor1/2/3 on clothing materials.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Farming|Character")
+	void ApplyClothingDyes(FLinearColor DyeA, FLinearColor DyeB, FLinearColor DyeC);
 
 	/** Server RPC: Set character species (called by owning client) */
 	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Farming|Character")
 	void ServerSetSpecies(const FName& SpeciesID, ECharacterGender Gender);
 
 	/**
-	 * Server RPC: Set full appearance including body colors and hair style.
-	 * Prefer this over ServerSetSpecies when any appearance data needs to be synchronised.
+	 * Server RPC: Set full body appearance (species, gender, body colors, hair, beard).
 	 */
 	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Farming|Character")
 	void ServerSetAppearance(const FName& SpeciesID, ECharacterGender Gender,
 	                         FLinearColor ColorA, FLinearColor ColorB, FLinearColor ColorC,
-	                         FName HairStyleId);
+	                         FName HairStyleId, FName BeardStyleId);
+
+	/**
+	 * Server RPC: Set clothing equipment and dye colors.
+	 * Call after character creation or when the player changes outfit.
+	 */
+	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Farming|Character")
+	void ServerSetClothing(const TArray<FEquippedClothingSlot>& EquippedClothing,
+	                       FLinearColor DyeA, FLinearColor DyeB, FLinearColor DyeC);
 
 	/** Debug: Show player info above character */
 	UFUNCTION(BlueprintCallable, Category = "Farming|Debug")
@@ -180,13 +217,37 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_AppearanceData, BlueprintReadOnly, Category = "Farming|Character")
 	FLinearColor ReplicatedBodyColorC = FLinearColor::White;
 
-	/** Replicated hair/mane/crest style ID - looked up in UHairStyleDatabase */
+	/** Replicated hair/mane/crest style ID */
 	UPROPERTY(ReplicatedUsing = OnRep_AppearanceData, BlueprintReadOnly, Category = "Farming|Character")
 	FName ReplicatedHairStyleId;
 
-	/** Called when any replicated appearance property changes */
+	/** Replicated beard/facial hair style ID */
+	UPROPERTY(ReplicatedUsing = OnRep_AppearanceData, BlueprintReadOnly, Category = "Farming|Character")
+	FName ReplicatedBeardStyleId;
+
+	/** Replicated equipped clothing per slot */
+	UPROPERTY(ReplicatedUsing = OnRep_ClothingData, BlueprintReadOnly, Category = "Farming|Character")
+	TArray<FEquippedClothingSlot> ReplicatedEquippedClothing;
+
+	/** Replicated clothing dye A */
+	UPROPERTY(ReplicatedUsing = OnRep_ClothingData, BlueprintReadOnly, Category = "Farming|Character")
+	FLinearColor ReplicatedClothingDyeA = FLinearColor::White;
+
+	/** Replicated clothing dye B */
+	UPROPERTY(ReplicatedUsing = OnRep_ClothingData, BlueprintReadOnly, Category = "Farming|Character")
+	FLinearColor ReplicatedClothingDyeB = FLinearColor::White;
+
+	/** Replicated clothing dye C */
+	UPROPERTY(ReplicatedUsing = OnRep_ClothingData, BlueprintReadOnly, Category = "Farming|Character")
+	FLinearColor ReplicatedClothingDyeC = FLinearColor::White;
+
+	/** Called when any replicated body/hair/beard appearance property changes */
 	UFUNCTION()
 	void OnRep_AppearanceData();
+
+	/** Called when replicated clothing data changes */
+	UFUNCTION()
+	void OnRep_ClothingData();
 
 	/** Restore character state from save data */
 	void RestoreFromSave();

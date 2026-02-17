@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/SaveGame.h"
 #include "Data/SpeciesDatabase.h"
+#include "Data/ClothingDatabase.h"
 #include "Math/Color.h"
 #include "FarmingCharacterSaveGame.generated.h"
 
@@ -94,11 +95,35 @@ public:
 
 	/**
 	 * Hair/mane/crest/fin style ID - references an entry in UHairStyleDatabase.
-	 * Leave as None for no hair mesh. The tint color is determined automatically
-	 * by the species HairColorSource setting.
+	 * Leave as None for no hair mesh.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Appearance")
 	FName HairStyleId;
+
+	/**
+	 * Beard/facial hair style ID - references an entry in UBeardStyleDatabase.
+	 * Leave as None for no beard. Tint color is driven by species BeardColorSource.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Appearance")
+	FName BeardStyleId;
+
+	// ---- Clothing ----
+
+	/** Clothing dye A - CharacterColor1 on all equipped clothing materials. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Appearance")
+	FLinearColor ClothingDyeA = FLinearColor::White;
+
+	/** Clothing dye B - CharacterColor2 on clothing materials. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Appearance")
+	FLinearColor ClothingDyeB = FLinearColor::White;
+
+	/** Clothing dye C - CharacterColor3 on clothing materials. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Appearance")
+	FLinearColor ClothingDyeC = FLinearColor::White;
+
+	/** Currently equipped clothing items per slot. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Appearance")
+	TArray<FEquippedClothingSlot> EquippedClothing;
 
 	/** Gear inventory items */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Inventory")

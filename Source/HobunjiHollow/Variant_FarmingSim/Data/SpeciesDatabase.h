@@ -70,10 +70,19 @@ struct FSpeciesData : public FTableRowBase
 	/**
 	 * Which body color channel the hair/mane/crest/fin mesh inherits for this species.
 	 * Applied by ApplyBodyColors() on the player character and by NPCDataComponent
-	 * when a hair mesh component tagged "HairMesh" is found on the NPC actor.
+	 * when a static mesh component tagged "HairMesh" is found on the NPC actor.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Species|Hair")
 	EHairColorSource HairColorSource = EHairColorSource::ColorA;
+
+	/**
+	 * Which body color channel the beard/facial hair mesh inherits for this species.
+	 * Decoupled from HairColorSource so e.g. a character can have brown fur (ColorA),
+	 * tan belly (ColorB) but a ginger beard (ColorC).
+	 * Applied to a static mesh component tagged "BeardMesh" on the actor.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Species|Hair")
+	EHairColorSource BeardColorSource = EHairColorSource::ColorA;
 
 	/** Get the appropriate skeletal mesh for the given gender */
 	USkeletalMesh* GetSkeletalMeshForGender(ECharacterGender Gender) const

@@ -5,6 +5,9 @@
 #include "NPCScheduleComponent.h"
 #include "Data/SpeciesDatabase.h"
 #include "Data/HairStyleDatabase.h"
+#include "Data/BeardStyleDatabase.h"
+#include "Data/ClothingDatabase.h"
+#include "Clothing/ClothingComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/Character.h"
@@ -377,6 +380,95 @@ void UNPCDataComponent::ApplyAppearanceToMesh(USkeletalMeshComponent* MeshCompon
 					UE_LOG(LogTemp, Verbose, TEXT("NPCDataComponent '%s': HairStyleId set but no 'HairMesh'-tagged component found on owner"),
 						*NPCId);
 				}
+			}
+		}
+	}
+
+	// ---- Beard ----
+	// Same pattern as hair: find a UStaticMeshComponent tagged "BeardMesh" on the owner.
+	if (!Appearance.BeardStyleId.IsNone())
+	{
+		UBeardStyleDatabase* BeardDB = UBeardStyleDatabase::Get();
+		if (BeardDB)
+		{
+			FBeardStyleData BeardData;
+			if (BeardDB->GetBeardStyleData(Appearance.BeardStyleId, BeardData))
+			{
+				UStaticMeshComponent* BeardComp = nullptr;
+				TArray<UStaticMeshComponent*> StaticMeshComps;
+				AActor* Owner = GetOwner();
+				if (Owner)
+				{
+					Owner->GetComponents<UStaticMeshComponent>(StaticMeshComps);
+					for (UStaticMeshComponent* Comp : StaticMeshComps)
+					{
+						if (Comp->ComponentHasTag(FName("BeardMesh")))
+						{
+							BeardComp = Comp;
+							break;
+						}
+					}
+				}
+
+				if (BeardComp)
+				{
+					UStaticMesh* BeardMesh = BeardData.BeardMesh.LoadSynchronous();
+					if (BeardMesh)
+					{
+						BeardComp->SetStaticMesh(BeardMesh);
+						BeardComp->AttachToComponent(MeshComponent,
+							FAttachmentTransformRules::SnapToTargetNotIncludingScale,
+							BeardDB->BeardAttachSocket);
+						BeardComp->SetVisibility(true);
+						BeardComp->SetHiddenInGame(false);
+
+						// Resolve beard color from species BeardColorSource
+						FLinearColor BeardColor = Appearance.CharacterColor1;
+						if (!Appearance.SpeciesId.IsEmpty())
+						{
+							FSpeciesData SpeciesData;
+							if (USpeciesDatabase::GetSpeciesData(FName(*Appearance.SpeciesId), SpeciesData))
+							{
+								switch (SpeciesData.BeardColorSource)
+								{
+									case EHairColorSource::ColorB: BeardColor = Appearance.CharacterColor2; break;
+									case EHairColorSource::ColorC: BeardColor = Appearance.CharacterColor3; break;
+									default: break;
+								}
+							}
+						}
+
+						for (int32 i = 0; i < BeardComp->GetNumMaterials(); ++i)
+						{
+							UMaterialInstanceDynamic* BeardMat = BeardComp->CreateAndSetMaterialInstanceDynamic(i);
+							if (BeardMat)
+							{
+								BeardMat->SetVectorParameterValue(TEXT("CharacterColor1"), BeardColor);
+							}
+						}
+
+						UE_LOG(LogTemp, Log, TEXT("NPCDataComponent '%s': Applied beard style '%s'"),
+							*NPCId, *Appearance.BeardStyleId.ToString());
+					}
+				}
+			}
+		}
+	}
+
+	// ---- Clothing ----
+	// Hand off to UClothingComponent if one exists on the owner.
+	if (Appearance.Clothing.Num() > 0)
+	{
+		AActor* Owner = GetOwner();
+		if (Owner)
+		{
+			UClothingComponent* ClothingComp = Owner->FindComponentByClass<UClothingComponent>();
+			if (ClothingComp)
+			{
+				ClothingComp->UnequipAll();
+				ClothingComp->EquippedItems = Appearance.Clothing;
+				ClothingComp->ApplyAllEquipped();
+				ClothingComp->ApplyDyes(Appearance.ClothingDyeA, Appearance.ClothingDyeB, Appearance.ClothingDyeC);
 			}
 		}
 	}

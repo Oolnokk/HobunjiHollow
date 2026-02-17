@@ -44,6 +44,7 @@ public class HobunjiHollow : ModuleRules
 			"HobunjiHollow/Variant_FarmingSim/Inventory",
 			"HobunjiHollow/Variant_FarmingSim/Interaction",
 			"HobunjiHollow/Variant_FarmingSim/NPC",
+			"HobunjiHollow/Variant_FarmingSim/Clothing",
 			"HobunjiHollow/Variant_FarmingSim/UI",
 			"HobunjiHollow/Variant_FarmingSim/Grid"
 		});
