@@ -106,6 +106,141 @@ struct FNPCGiftPreference
 /**
  * A single dialogue line with conditions
  */
+UENUM(BlueprintType)
+enum class EDialogueTokenType : uint8
+{
+	None,
+	PlayerName,
+	HeldItemId,
+	PlayerSpeciesId
+};
+
+USTRUCT(BlueprintType)
+struct FDialogueCondition
+{
+	GENERATED_BODY()
+
+	/** Quest ID to check */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FString QuestId;
+
+	/** Minimum quest stage required (-1 = any) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	int32 MinQuestStage = -1;
+
+	/** Maximum quest stage allowed (-1 = any) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	int32 MaxQuestStage = -1;
+
+	/** Specific NPC ID to check friendship with */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FString NPCId;
+
+	/** Minimum hearts with specific NPC (-1 = any) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	int32 MinNPCHearts = -1;
+
+	/** Maximum hearts with specific NPC (-1 = any) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	int32 MaxNPCHearts = -1;
+
+	/** NPC grouping tag to check total friendship for */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FString NPCGroupTag;
+
+	/** Minimum hearts for group tag (-1 = any) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	int32 MinGroupHearts = -1;
+
+	/** Maximum hearts for group tag (-1 = any) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	int32 MaxGroupHearts = -1;
+
+	/** Required player species ID */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FString PlayerSpeciesId;
+
+	/** Required held item ID */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FString HeldItemId;
+
+	/** Flags that must be set */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TArray<FString> RequiredFlags;
+
+	/** Flags that must not be set */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TArray<FString> BlockingFlags;
+
+	/** Custom conditions that must be active */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TArray<FString> RequiredCustomConditions;
+
+	/** Custom conditions that must not be active */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TArray<FString> BlockingCustomConditions;
+};
+
+USTRUCT(BlueprintType)
+struct FDialogueNode
+{
+	GENERATED_BODY()
+
+	/** Text to display for this node */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FText Text;
+
+	/** Token to replace instead of Text */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	EDialogueTokenType TokenType = EDialogueTokenType::None;
+
+	/** Conditions to show this node */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FDialogueCondition Condition;
+
+	/** Child nodes to render inline after this node */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TArray<FDialogueNode> Children;
+};
+
+USTRUCT(BlueprintType)
+struct FDialogueContext
+{
+	GENERATED_BODY()
+
+	/** Player name for token replacement */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FString PlayerName;
+
+	/** Player species ID for token replacement */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FString PlayerSpeciesId;
+
+	/** Held item ID for token replacement */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FString HeldItemId;
+
+	/** Quest stages by quest ID */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TMap<FString, int32> QuestStages;
+
+	/** NPC hearts by NPC ID */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TMap<FString, int32> NPCHearts;
+
+	/** Group hearts by group tag */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TMap<FString, int32> GroupHearts;
+
+	/** Active flags */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TArray<FString> ActiveFlags;
+
+	/** Active custom conditions */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TArray<FString> ActiveCustomConditions;
+};
+
 USTRUCT(BlueprintType)
 struct FNPCDialogueLine
 {
@@ -146,6 +281,14 @@ struct FNPCDialogueLine
 	/** Event flag that must NOT be set */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
 	FString BlockingFlag;
+
+	/** Additional conditions for this line */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FDialogueCondition Condition;
+
+	/** Structured inline nodes for this line */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TArray<FDialogueNode> Nodes;
 
 	/** Priority for selection (higher = more likely when multiple match) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
@@ -549,6 +692,32 @@ public:
 	bool GetBestDialogue(const FString& Category, int32 CurrentHearts, int32 CurrentSeason,
 		int32 CurrentDayOfWeek, const FString& CurrentWeather, const FString& CurrentLocation,
 		const TArray<FString>& ActiveFlags, FNPCDialogueLine& OutDialogue) const;
+
+	/** Get best matching dialogue line based on current conditions and extended context */
+	UFUNCTION(BlueprintPure, Category = "NPC Data")
+	bool GetBestDialogueWithContext(const FString& Category, int32 CurrentHearts, int32 CurrentSeason,
+		int32 CurrentDayOfWeek, const FString& CurrentWeather, const FString& CurrentLocation,
+		const FDialogueContext& Context, FNPCDialogueLine& OutDialogue) const;
+
+	/** Resolve structured dialogue nodes into a displayable line */
+	UFUNCTION(BlueprintPure, Category = "NPC Data")
+	FText ResolveDialogueLineText(const FNPCDialogueLine& Line, const FDialogueContext& Context) const;
+
+	/** Export dialogue sets to a JSON string */
+	UFUNCTION(BlueprintCallable, Category = "NPC Data|Dialogue|Json")
+	bool ExportDialogueToJsonString(FString& OutJson) const;
+
+	/** Export dialogue sets to a JSON file */
+	UFUNCTION(BlueprintCallable, Category = "NPC Data|Dialogue|Json")
+	bool ExportDialogueToJsonFile(const FString& FilePath, FString& OutError) const;
+
+	/** Import dialogue sets from a JSON string */
+	UFUNCTION(BlueprintCallable, Category = "NPC Data|Dialogue|Json")
+	bool ImportDialogueFromJsonString(const FString& JsonString, FString& OutError);
+
+	/** Import dialogue sets from a JSON file */
+	UFUNCTION(BlueprintCallable, Category = "NPC Data|Dialogue|Json")
+	bool ImportDialogueFromJsonFile(const FString& FilePath, FString& OutError);
 
 	/** Get current schedule slot for the given time */
 	UFUNCTION(BlueprintPure, Category = "NPC Data")

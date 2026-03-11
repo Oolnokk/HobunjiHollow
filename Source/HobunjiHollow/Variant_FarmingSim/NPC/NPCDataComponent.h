@@ -181,6 +181,12 @@ public:
 	bool GetDialogue(const FString& Category, int32 Season, int32 DayOfWeek,
 		const FString& Weather, const FString& Location, FNPCDialogueLine& OutDialogue);
 
+	/** Get dialogue with extended context and resolved text */
+	UFUNCTION(BlueprintCallable, Category = "NPC Data|Dialogue")
+	bool GetDialogueResolved(const FString& Category, int32 Season, int32 DayOfWeek,
+		const FString& Weather, const FString& Location, const FDialogueContext& Context,
+		FText& OutText, FNPCDialogueLine& OutDialogue);
+
 	/** Record that player talked to this NPC */
 	UFUNCTION(BlueprintCallable, Category = "NPC Data|Dialogue")
 	void RecordConversation();
